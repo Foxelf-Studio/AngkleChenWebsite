@@ -1,8 +1,8 @@
 ---
 siteTitle: 陈叔叔的奇幻空间
-siteSubtitle: 这里是我的个人博客。用于分享我制作的软件和一些资源。
-heroName: 陈叔叔
-heroCta: 看看我做的软件 →
+siteSubtitle: 这里是我的个人博客，用于分享我制作的软件和一些资源。喜欢自称陈叔叔
+heroName: 咸鱼大法
+heroCta: 看看我做的软件
 heroCtaLink: /apps
 appsTitle: 陈叔叔系列软件
 appsIntro: 全部开源、免费、无广告。为爱发电
@@ -10,7 +10,7 @@ email: Thetimeflies@vip.qq.com
 github: Foxelf-Studio
 ---
 
-我是咸鱼大法，也叫陈叔叔
+我是咸鱼大法，喜欢自称陈叔叔
 
 ## 我在做什么
 
