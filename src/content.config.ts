@@ -20,6 +20,7 @@ const apps = defineCollection({
     version: z.string().default(""),
     tag: z.string().default(""),
     description: z.string().default(""),
+    downloadUrl: z.string().default(""),
   }),
 });
 

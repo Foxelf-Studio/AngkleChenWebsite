@@ -101,6 +101,12 @@ export default defineConfig({
               component: "textarea",
             },
           },
+          {
+            type: "string",
+            name: "downloadUrl",
+            label: "下载链接",
+            description: "填写后「下载」按钮会变成可点击的链接；留空则显示「敬请期待」",
+          },
         ],
       },
       {

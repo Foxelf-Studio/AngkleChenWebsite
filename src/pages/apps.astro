@@ -25,7 +25,22 @@ const apps = await getCollection("apps");
               <span class={tagChip}>{app.data.tag}</span>
               <p class="text-white/50 text-sm leading-relaxed mt-3">{app.data.description}</p>
               <div class="mt-5">
-                <button class={`${btn} px-5 py-2 text-xs`}>下载</button>
+                {
+                  app.data.downloadUrl ? (
+                    <a
+                      href={app.data.downloadUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      class={`${btn} inline-block px-5 py-2 text-xs`}
+                    >
+                      下载
+                    </a>
+                  ) : (
+                    <span class="inline-block px-5 py-2 text-xs text-white/35 border border-white/10 rounded-2xl cursor-not-allowed">
+                      敬请期待
+                    </span>
+                  )
+                }
               </div>
             </div>
           ))
