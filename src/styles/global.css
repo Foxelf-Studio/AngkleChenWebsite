@@ -1,0 +1,181 @@
+@import "tailwindcss";
+
+/* ============ Glassmorphism 全局基底 ============ */
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  background-color: #0b1322;
+  background-image:
+    radial-gradient(640px circle at 85% 10%, rgba(124, 156, 196, 0.25), transparent 60%),
+    radial-gradient(560px circle at 10% 90%, rgba(51, 81, 122, 0.3), transparent 60%),
+    radial-gradient(480px circle at 50% 55%, rgba(228, 184, 99, 0.08), transparent 60%);
+  background-attachment: fixed;
+  font-family: "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", "Source Han Sans SC", sans-serif;
+  min-height: 100vh;
+  color: #fff;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* 噪点颗粒层（SVG feTurbulence，约 2.5%） */
+.grain::after {
+  content: "";
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 50;
+  opacity: 0.025;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='200' height='200'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2'/%3E%3C/filter%3E%3Crect width='200' height='200' filter='url(%23n)'/%3E%3C/svg%3E");
+}
+
+::selection {
+  background: rgba(228, 184, 99, 0.3);
+  color: #fff;
+}
+
+/* ============ Markdown 正文排版（.md-body） ============ */
+.md-body {
+  color: rgba(255, 255, 255, 0.8);
+  line-height: 1.9;
+  font-size: 0.95rem;
+  max-width: 68ch;
+}
+.md-body > :first-child {
+  margin-top: 0;
+}
+.md-body > :last-child {
+  margin-bottom: 0;
+}
+.md-body h1,
+.md-body h2,
+.md-body h3,
+.md-body h4 {
+  color: #fff;
+  font-weight: 600;
+  margin: 1.8em 0 0.7em;
+  line-height: 1.4;
+}
+.md-body h1 {
+  font-size: 1.75rem;
+}
+.md-body h2 {
+  font-size: 1.4rem;
+}
+.md-body h3 {
+  font-size: 1.15rem;
+}
+.md-body p {
+  margin: 0.9em 0;
+}
+.md-body a {
+  color: #e4b863;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  text-decoration-color: rgba(228, 184, 99, 0.4);
+  transition: all 500ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+.md-body a:hover {
+  text-decoration-color: #e4b863;
+}
+.md-body strong {
+  color: #fff;
+}
+.md-body ul,
+.md-body ol {
+  margin: 0.9em 0;
+  padding-left: 1.5em;
+}
+.md-body li {
+  margin: 0.4em 0;
+}
+.md-body ul li::marker {
+  color: #e4b863;
+}
+.md-body blockquote {
+  margin: 1.2em 0;
+  padding: 1em 1.4em;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 1rem;
+  color: rgba(255, 255, 255, 0.7);
+}
+.md-body :not(pre) > code {
+  font-family: ui-monospace, "Cascadia Code", Consolas, monospace;
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 0.5rem;
+  padding: 0.15em 0.45em;
+  font-size: 0.85em;
+  color: #f3dca8;
+}
+.md-body pre {
+  margin: 1.2em 0;
+  padding: 1.2em 1.4em;
+  overflow-x: auto;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: 1.25rem;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.12), inset 0 -1px 0 rgba(2, 6, 16, 0.3);
+}
+.md-body pre code {
+  background: transparent;
+  border: none;
+  padding: 0;
+  color: rgba(255, 255, 255, 0.85);
+  font-size: 0.85rem;
+  line-height: 1.7;
+}
+.md-body img {
+  border-radius: 1.25rem;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  margin: 1.2em 0;
+  max-width: 100%;
+}
+.md-body hr {
+  border: none;
+  height: 1px;
+  background: rgba(255, 255, 255, 0.15);
+  margin: 2em 0;
+}
+.md-body table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 1.2em 0;
+  font-size: 0.88rem;
+}
+.md-body th {
+  color: #fff;
+  text-align: left;
+  padding: 0.6em 0.9em;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.2);
+}
+.md-body td {
+  padding: 0.6em 0.9em;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  color: rgba(255, 255, 255, 0.75);
+}
+
+/* ============ 动效 ============ */
+.fade-in {
+  animation: fadeUp 600ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+@keyframes fadeUp {
+  from {
+    opacity: 0;
+    transform: translateY(14px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
+}

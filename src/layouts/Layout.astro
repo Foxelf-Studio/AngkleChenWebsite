@@ -1,0 +1,104 @@
+---
+import "../styles/global.css";
+import { getEntry } from "astro:content";
+
+interface Props {
+  title?: string;
+  description?: string;
+}
+
+const { title = "陈叔叔的奇幻空间", description } = Astro.props;
+
+const aboutEntry = await getEntry("about", "about");
+const site = aboutEntry?.data ?? {};
+const siteTitle = site.siteTitle || "陈叔叔的奇幻空间";
+const siteSubtitle = site.siteSubtitle || "";
+const email = site.email || "";
+const github = site.github || "";
+---
+
+<!DOCTYPE html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="description" content={description || siteSubtitle} />
+    <title>{title}</title>
+  </head>
+  <body class="grain text-white antialiased">
+    <!-- 导航栏 -->
+    <nav
+      class="fixed top-0 left-0 right-0 z-40 bg-white/8 backdrop-blur-[40px] backdrop-saturate-[180%] border-b border-white/15 px-6 md:px-8"
+    >
+      <div class="flex items-center justify-between max-w-6xl mx-auto gap-6 h-16">
+        <a href="/" class="font-semibold text-white text-lg md:text-xl tracking-wide">
+          ✨ {siteTitle}
+        </a>
+        <div class="hidden md:flex gap-6 text-sm text-white/80">
+          <a href="/" class="hover:text-white transition-all duration-500 ease-[cubic-bezier(0.16,1,0.3,1)]">文章</a>
+          <a href="/tags" class="hover:text-white transition-all duration-500 ease-[cubic-bezier(0.16,1,0.3,1)]">标签</a>
+          <a href="/apps" class="hover:text-white transition-all duration-500 ease-[cubic-bezier(0.16,1,0.3,1)]">陈叔叔的软件</a>
+          <a href="/about" class="hover:text-white transition-all duration-500 ease-[cubic-bezier(0.16,1,0.3,1)]">关于</a>
+        </div>
+        <button
+          id="menuBtn"
+          aria-label="打开菜单"
+          class="md:hidden bg-white/10 backdrop-blur-[40px] backdrop-saturate-[180%] border border-white/20 rounded-2xl text-white px-3 py-1.5 text-sm shadow-[0_4px_16px_rgba(3,7,18,0.45),inset_0_1px_0_rgba(255,255,255,0.25),inset_0_-1px_0_rgba(2,6,16,0.3)] transition-all duration-500 ease-[cubic-bezier(0.16,1,0.3,1)]"
+        >
+          菜单
+        </button>
+      </div>
+      <div id="mobileMenu" class="hidden md:hidden pb-4">
+        <div class="flex flex-col gap-3 text-sm text-white/80 max-w-6xl mx-auto">
+          <a href="/" class="hover:text-white">文章</a>
+          <a href="/tags" class="hover:text-white">标签</a>
+          <a href="/apps" class="hover:text-white">陈叔叔的软件</a>
+          <a href="/about" class="hover:text-white">关于</a>
+        </div>
+      </div>
+    </nav>
+
+    <main class="pt-16">
+      <slot />
+    </main>
+
+    <!-- 页脚 -->
+    <footer
+      class="bg-white/8 backdrop-blur-[60px] backdrop-saturate-[180%] border-t border-white/15 text-white/80 py-16 md:py-24 px-6 md:px-8 mt-8"
+    >
+      <div class="max-w-6xl mx-auto">
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-8">
+          <div>
+            <span class="font-semibold text-white text-xl md:text-2xl">✨ {siteTitle}</span>
+            <p class="text-white/50 text-xs mt-3 leading-relaxed">
+              {siteSubtitle || "记录技术、生活与奇思妙想。"}
+            </p>
+          </div>
+          <div>
+            <h4 class="font-semibold text-white text-base mb-3">导航</h4>
+            <ul class="text-white/80 text-xs space-y-2">
+              <li><a href="/" class="hover:text-[#E4B863] transition-all duration-500 ease-[cubic-bezier(0.16,1,0.3,1)]">文章列表</a></li>
+              <li><a href="/tags" class="hover:text-[#E4B863] transition-all duration-500 ease-[cubic-bezier(0.16,1,0.3,1)]">标签分类</a></li>
+              <li><a href="/apps" class="hover:text-[#E4B863] transition-all duration-500 ease-[cubic-bezier(0.16,1,0.3,1)]">陈叔叔的软件</a></li>
+              <li><a href="/about" class="hover:text-[#E4B863] transition-all duration-500 ease-[cubic-bezier(0.16,1,0.3,1)]">关于我</a></li>
+            </ul>
+          </div>
+          <div>
+            <h4 class="font-semibold text-white text-base mb-3">联系</h4>
+            <ul class="text-white/80 text-xs space-y-2">
+              {email && <li class="text-white/50">Email: {email}</li>}
+              {github && <li class="text-white/50">GitHub: @{github}</li>}
+            </ul>
+          </div>
+        </div>
+        <p class="text-white/50 text-xs mt-10">© 2026 {siteTitle} · 用 ❤️ 和 Markdown 构建</p>
+      </div>
+    </footer>
+
+    <script>
+      document.getElementById("menuBtn")?.addEventListener("click", () => {
+        document.getElementById("mobileMenu")?.classList.toggle("hidden");
+      });
+    </script>
+  </body>
+</html>

@@ -1,0 +1,33 @@
+{
+  "name": "angklechen-website",
+  "type": "module",
+  "version": "1.0.0",
+  "engines": {
+    "node": ">=22.22.0"
+  },
+  "scripts": {
+    "dev": "tinacms dev -c \"astro dev\"",
+    "build": "tinacms build --content=local -c \"astro build\"",
+    "preview": "astro preview",
+    "astro": "astro"
+  },
+  "dependencies": {
+    "@astrojs/cloudflare": "^13.7.0",
+    "@astrojs/mdx": "^6.0.2",
+    "@tailwindcss/vite": "^4.3.0",
+    "@tinacms/astro": "^0.5.1",
+    "astro": "^6.4.4",
+    "sharp": "^0.34.5",
+    "tailwindcss": "^4.3.0"
+  },
+  "devDependencies": {
+    "@astrojs/check": "^0.9.9",
+    "@tinacms/cli": "^2.5.3",
+    "@types/node": "^25.9.1",
+    "react": "^19.2.7",
+    "react-dom": "^19.2.7",
+    "tinacms": "^3.10.0",
+    "typescript": "^6.0.3",
+    "vite": "^7.3.2"
+  }
+}
