@@ -13,5 +13,8 @@ export const btn =
 export const tagChip =
   "inline-block bg-white/6 backdrop-blur-[30px] backdrop-saturate-[160%] border border-white/15 rounded-2xl text-white/85 text-xs px-3 py-1 shadow-[inset_0_1px_0_rgba(255,255,255,0.15),inset_0_-1px_0_rgba(2,6,16,0.3)] hover:bg-white/12 hover:border-white/30 transition-all duration-500 ease-[cubic-bezier(0.16,1,0.3,1)]";
 
+export const platformChip =
+  "inline-block bg-white/6 backdrop-blur-[30px] backdrop-saturate-[160%] border border-[#E4B863]/40 rounded-2xl text-[#E4B863] text-xs px-3 py-1 shadow-[inset_0_1px_0_rgba(255,255,255,0.12),inset_0_-1px_0_rgba(2,6,16,0.3)] hover:bg-white/12 hover:border-[#E4B863]/60 hover:shadow-[0_0_12px_rgba(228,184,99,0.18),inset_0_1px_0_rgba(255,255,255,0.22),inset_0_-1px_0_rgba(2,6,16,0.3)] transition-all duration-500 ease-[cubic-bezier(0.16,1,0.3,1)]";
+
 export const trans =
   "transition-all duration-500 ease-[cubic-bezier(0.16,1,0.3,1)]";
