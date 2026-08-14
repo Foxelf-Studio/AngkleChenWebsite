@@ -28,6 +28,9 @@ const about = defineCollection({
   schema: z.object({
     siteTitle: z.string().default("陈叔叔的奇幻空间"),
     siteSubtitle: z.string().default(""),
+    heroName: z.string().default("陈叔叔"),
+    heroCta: z.string().default("看看我做的软件 →"),
+    heroCtaLink: z.string().default("/apps"),
     email: z.string().default(""),
     github: z.string().default(""),
   }),

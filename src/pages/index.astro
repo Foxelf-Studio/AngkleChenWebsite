@@ -9,6 +9,9 @@ const posts = (await getCollection("posts")).sort(
 
 const aboutEntry = await getEntry("about", "about");
 const siteSubtitle = aboutEntry?.data.siteSubtitle || "记录技术、生活与奇思妙想。";
+const heroName = aboutEntry?.data.heroName || "陈叔叔";
+const heroCta = aboutEntry?.data.heroCta || "看看我做的软件 →";
+const heroCtaLink = aboutEntry?.data.heroCtaLink || "/apps";
 
 function fmt(d: Date) {
   return d.toISOString().slice(0, 10);
@@ -19,13 +22,13 @@ function fmt(d: Date) {
   <section class="py-16 md:py-24 px-6 md:px-8">
     <div class="max-w-4xl mx-auto fade-in">
       <h1 class="font-semibold text-white text-4xl md:text-6xl leading-tight">
-        你好，我是<span class="text-[#E4B863]">陈叔叔</span>。
+        你好，我是<span class="text-[#E4B863]">{heroName}</span>。
       </h1>
       <p class="text-white/80 text-sm md:text-base max-w-xl mt-6 leading-relaxed">
         {siteSubtitle}
       </p>
       <div class="mt-8">
-        <a href="/apps" class={`${btn} inline-block px-6 py-3 text-sm`}>看看我做的软件 →</a>
+        <a href={heroCtaLink} class={`${btn} inline-block px-6 py-3 text-sm`}>{heroCta}</a>
       </div>
     </div>
   </section>

@@ -124,6 +124,24 @@ export default defineConfig({
           },
           {
             type: "string",
+            name: "heroName",
+            label: "主页大标题里的名字",
+            description: "显示为「你好，我是 XXX。」，例如：陈叔叔",
+          },
+          {
+            type: "string",
+            name: "heroCta",
+            label: "主页按钮文字",
+            description: "例如：看看我做的软件 →",
+          },
+          {
+            type: "string",
+            name: "heroCtaLink",
+            label: "主页按钮链接",
+            description: "例如：/apps",
+          },
+          {
+            type: "string",
             name: "email",
             label: "邮箱",
           },

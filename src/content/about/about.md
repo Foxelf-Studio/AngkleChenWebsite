@@ -1,6 +1,9 @@
 ---
 siteTitle: 陈叔叔的奇幻空间
 siteSubtitle: 这里是我的奇幻空间——写代码、写生活、写一些深夜里的奇思妙想。所有文章都用 Markdown 书写，在深墨夜色里慢慢发酵。
+heroName: 陈叔叔
+heroCta: 看看我做的软件 →
+heroCtaLink: /apps
 email: uncle-chen@example.com
 github: uncle-chen
 ---
