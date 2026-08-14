@@ -28,7 +28,12 @@ const appsIntro =
                 <h3 class="font-semibold text-white text-xl md:text-2xl">{app.data.name}</h3>
                 <span class="text-[#E4B863] text-xs font-mono">{app.data.version}</span>
               </div>
-              <span class={tagChip}>{app.data.tag}</span>
+              <div class="flex flex-wrap gap-2">
+                <span class={tagChip}>{app.data.tag}</span>
+                {app.data.platforms.map((p) => (
+                  <span class="inline-block bg-white/6 backdrop-blur-[30px] backdrop-saturate-[160%] border border-[#E4B863]/40 rounded-2xl text-[#E4B863] text-xs px-3 py-1 shadow-[inset_0_1px_0_rgba(255,255,255,0.12)]">{p}</span>
+                ))}
+              </div>
               <p class="text-white/50 text-sm leading-relaxed mt-3">{app.data.description}</p>
               <div class="mt-5">
                 {

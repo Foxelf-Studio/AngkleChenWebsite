@@ -19,6 +19,7 @@ const apps = defineCollection({
     icon: z.string().default("📦"),
     version: z.string().default(""),
     tag: z.string().default(""),
+    platforms: z.array(z.string()).default([]),
     description: z.string().default(""),
     downloadUrl: z.string().default(""),
   }),

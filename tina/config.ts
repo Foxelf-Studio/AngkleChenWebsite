@@ -95,6 +95,17 @@ export default defineConfig({
           },
           {
             type: "string",
+            name: "platforms",
+            label: "适用平台",
+            list: true,
+            description: "可多选，例如 Windows、安卓",
+            ui: {
+              component: "tags",
+            },
+            options: ["Windows", "安卓", "macOS", "Linux", "iOS", "Web"],
+          },
+          {
+            type: "string",
             name: "description",
             label: "简介",
             ui: {
