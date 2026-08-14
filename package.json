@@ -12,8 +12,6 @@
     "astro": "astro"
   },
   "dependencies": {
-    "@astrojs/cloudflare": "^13.7.0",
-    "@astrojs/mdx": "^6.0.2",
     "@tailwindcss/vite": "^4.3.0",
     "@tinacms/astro": "^0.5.1",
     "astro": "^6.4.4",
