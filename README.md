@@ -39,6 +39,9 @@ npm run build   # 输出到 dist/
 部署到 Cloudflare Pages：
 - 构建命令：`npm run build`
 - 输出目录：`dist`
+- 环境变量：`NODE_VERSION = 22`（package.json 要求 node >=22.22.0）
+
+> 注意：CF Pages 使用 `npm ci` 安装依赖。若在 Windows 本地改动了依赖，请确保重新生成的 `package-lock.json` 能通过 `npm ci --dry-run` 校验（跨平台 optional 依赖可能出现空版本号问题）。构建失败后请用「重新部署」（Deploy）而非「重试」（Retry），否则会继续使用旧 commit。
 
 ## 目录说明
 
