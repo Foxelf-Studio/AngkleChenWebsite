@@ -32,6 +32,8 @@ const about = defineCollection({
     heroName: z.string().default("陈叔叔"),
     heroCta: z.string().default("看看我做的软件 →"),
     heroCtaLink: z.string().default("/apps"),
+    appsTitle: z.string().default("陈叔叔的软件"),
+    appsIntro: z.string().default("这些年随手做的小工具，全部免费、无广告、本地优先。如果喜欢，欢迎来文章里留言告诉我。"),
     email: z.string().default(""),
     github: z.string().default(""),
   }),

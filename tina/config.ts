@@ -148,6 +148,21 @@ export default defineConfig({
           },
           {
             type: "string",
+            name: "appsTitle",
+            label: "软件页标题",
+            description: "/apps 页面顶部的大标题",
+          },
+          {
+            type: "string",
+            name: "appsIntro",
+            label: "软件页介绍",
+            description: "/apps 页面标题下方的说明文字",
+            ui: {
+              component: "textarea",
+            },
+          },
+          {
+            type: "string",
             name: "email",
             label: "邮箱",
           },

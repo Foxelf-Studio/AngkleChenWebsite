@@ -1,17 +1,23 @@
 ---
 import Layout from "../layouts/Layout.astro";
-import { getCollection } from "astro:content";
+import { getCollection, getEntry } from "astro:content";
 import { card, cardHover, btn, tagChip, trans } from "../lib/glass";
 
 const apps = await getCollection("apps");
+
+const aboutEntry = await getEntry("about", "about");
+const appsTitle = aboutEntry?.data.appsTitle || "陈叔叔的软件";
+const appsIntro =
+  aboutEntry?.data.appsIntro ||
+  "这些年随手做的小工具，全部免费、无广告、本地优先。如果喜欢，欢迎来文章里留言告诉我。";
 ---
 
-<Layout title="陈叔叔的软件 · 陈叔叔的奇幻空间">
+<Layout title={`${appsTitle} · 陈叔叔的奇幻空间`}>
   <section class="py-16 md:py-24 px-6 md:px-8">
     <div class="max-w-6xl mx-auto fade-in">
-      <h1 class="font-semibold text-white text-3xl md:text-5xl">陈叔叔的软件</h1>
+      <h1 class="font-semibold text-white text-3xl md:text-5xl">{appsTitle}</h1>
       <p class="text-white/80 text-sm md:text-base mt-4 max-w-xl leading-relaxed">
-        这些年随手做的小工具，全部免费、无广告、本地优先。如果喜欢，欢迎来文章里留言告诉我。
+        {appsIntro}
       </p>
       <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mt-10">
         {
