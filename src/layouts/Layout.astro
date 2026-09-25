@@ -49,12 +49,14 @@ const github = site.github || "";
           菜单
         </button>
       </div>
-      <div id="mobileMenu" class="hidden md:hidden pb-4">
-        <div class="flex flex-col gap-3 text-sm text-white/80 max-w-6xl mx-auto">
-          <a href="/" class="hover:text-white">文章</a>
-          <a href="/tags" class="hover:text-white">标签</a>
-          <a href="/apps" class="hover:text-white">陈叔叔的软件</a>
-          <a href="/about" class="hover:text-white">关于</a>
+      <div id="mobileMenu" class="mobile-menu md:hidden" aria-hidden="true">
+        <div class="mobile-menu__inner">
+          <div class="flex flex-col gap-3 text-sm text-white/80 max-w-6xl mx-auto pb-4">
+            <a href="/" class="hover:text-white">文章</a>
+            <a href="/tags" class="hover:text-white">标签</a>
+            <a href="/apps" class="hover:text-white">陈叔叔的软件</a>
+            <a href="/about" class="hover:text-white">关于</a>
+          </div>
         </div>
       </div>
     </nav>
@@ -97,9 +99,76 @@ const github = site.github || "";
     </footer>
 
     <script>
-      document.getElementById("menuBtn")?.addEventListener("click", () => {
-        document.getElementById("mobileMenu")?.classList.toggle("hidden");
+      const menuBtn = document.getElementById("menuBtn");
+      const mobileMenu = document.getElementById("mobileMenu");
+      menuBtn?.addEventListener("click", () => {
+        const isOpen = mobileMenu?.classList.toggle("is-open");
+        mobileMenu?.setAttribute("aria-hidden", isOpen ? "false" : "true");
       });
     </script>
+
+    <style>
+      /* 移动端菜单：由上到下展开。
+         高度 0 → auto 用 grid 行高过渡（自动适配内容高度，无需写死 max-height） */
+      .mobile-menu {
+        display: grid;
+        grid-template-rows: 0fr;
+        transition: grid-template-rows 500ms cubic-bezier(0.16, 1, 0.3, 1);
+      }
+      .mobile-menu.is-open {
+        grid-template-rows: 1fr;
+      }
+
+      .mobile-menu__inner {
+        overflow: hidden;
+      }
+
+      /* 内容整体从上方 -14px 平移下来 + 淡入，非线性（快出慢收） */
+      .mobile-menu__inner > div {
+        transform: translateY(-14px);
+        opacity: 0;
+        visibility: hidden;
+        transition:
+          transform 500ms cubic-bezier(0.16, 1, 0.3, 1),
+          opacity 400ms cubic-bezier(0.16, 1, 0.3, 1),
+          visibility 0s linear 500ms;
+      }
+      .mobile-menu.is-open .mobile-menu__inner > div {
+        transform: translateY(0);
+        opacity: 1;
+        visibility: visible;
+        transition:
+          transform 500ms cubic-bezier(0.16, 1, 0.3, 1),
+          opacity 400ms cubic-bezier(0.16, 1, 0.3, 1),
+          visibility 0s;
+      }
+
+      /* 菜单项逐项错峰下滑，强化「由上到下」的层次感 */
+      .mobile-menu__inner > div > a {
+        opacity: 0;
+        transform: translateY(-10px);
+        transition:
+          transform 500ms cubic-bezier(0.16, 1, 0.3, 1),
+          opacity 400ms cubic-bezier(0.16, 1, 0.3, 1);
+      }
+      .mobile-menu.is-open .mobile-menu__inner > div > a {
+        opacity: 1;
+        transform: translateY(0);
+      }
+      .mobile-menu.is-open .mobile-menu__inner > div > a:nth-child(1) { transition-delay: 40ms; }
+      .mobile-menu.is-open .mobile-menu__inner > div > a:nth-child(2) { transition-delay: 80ms; }
+      .mobile-menu.is-open .mobile-menu__inner > div > a:nth-child(3) { transition-delay: 120ms; }
+      .mobile-menu.is-open .mobile-menu__inner > div > a:nth-child(4) { transition-delay: 160ms; }
+
+      /* 尊重系统「减少动态效果」偏好 */
+      @media (prefers-reduced-motion: reduce) {
+        .mobile-menu,
+        .mobile-menu__inner > div,
+        .mobile-menu__inner > div > a {
+          transition-duration: 1ms !important;
+          transition-delay: 0ms !important;
+        }
+      }
+    </style>
   </body>
 </html>
