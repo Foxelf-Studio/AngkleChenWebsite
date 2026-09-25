@@ -41,3 +41,12 @@ function fmt(d: Date) {
     </article>
   </section>
 </Layout>
+
+<script define:vars={{ postId: post.id }}>
+  // 记录本次阅读的文章，首页据此只给这一篇打上「阅读中」
+  try {
+    localStorage.setItem("lastReadPost", postId);
+  } catch (e) {
+    // 隐私模式等场景下 localStorage 不可用，静默忽略
+  }
+</script>

@@ -41,12 +41,15 @@ function fmt(d: Date) {
           posts.map((post) => (
             <a
               href={`/post/${post.id}`}
+              data-post-id={post.id}
               class={`block ${card} ${cardHover} ${trans} p-6 md:p-8`}
             >
               <div class="flex items-center gap-3 text-xs text-white/50 mb-3">
                 <span>{fmt(post.data.date)}</span>
-                <span class="w-1 h-1 rounded-full bg-[#E4B863]"></span>
-                <span>{post.body ? "阅读中" : ""}</span>
+                <span data-reading-mark class="hidden items-center gap-2">
+                  <span class="w-1 h-1 rounded-full bg-[#E4B863]"></span>
+                  <span class="text-[#E4B863]">阅读中</span>
+                </span>
               </div>
               <h3 class="font-semibold text-white text-xl md:text-2xl mb-2">{post.data.title}</h3>
               <p class="text-white/50 text-sm md:text-base leading-relaxed mb-4">{post.data.excerpt}</p>
@@ -62,3 +65,23 @@ function fmt(d: Date) {
     </div>
   </section>
 </Layout>
+
+<script>
+  // 只给「上一次阅读的那一篇」显示「阅读中」标记
+  try {
+    const lastRead = localStorage.getItem("lastReadPost");
+    if (lastRead) {
+      document.querySelectorAll("[data-post-id]").forEach((el) => {
+        if (el.getAttribute("data-post-id") === lastRead) {
+          const mark = el.querySelector("[data-reading-mark]");
+          if (mark) {
+            mark.classList.remove("hidden");
+            mark.classList.add("inline-flex");
+          }
+        }
+      });
+    }
+  } catch (e) {
+    // 隐私模式等场景下 localStorage 不可用，静默忽略
+  }
+</script>
