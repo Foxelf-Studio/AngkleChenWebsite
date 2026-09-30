@@ -16,8 +16,7 @@ npm install
 npm run dev
 ```
 
-- 站点：http://localhost:4321
-- 可视化编辑器：http://localhost:4321/admin/index.html
+- 站点：[http://localhost:4321](https://foxelf.pages.dev/)
 
 > 提示：在 `/admin` 里可以点页面上的文字直接编辑，保存即写回 `src/content/` 下的 Markdown 文件。
 
