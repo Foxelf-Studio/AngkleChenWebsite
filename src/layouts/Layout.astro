@@ -50,8 +50,8 @@ const github = site.github || "";
         </button>
       </div>
       <div id="mobileMenu" class="mobile-menu md:hidden" aria-hidden="true">
-        <div class="mobile-menu__inner">
-          <div class="flex flex-col gap-3 text-sm text-white/80 max-w-6xl mx-auto pb-4">
+        <div class="mobile-menu__panel">
+          <div class="flex flex-col gap-3 text-sm text-white/80 max-w-6xl mx-auto px-6 md:px-8 pb-4">
             <a href="/" class="hover:text-white">文章</a>
             <a href="/tags" class="hover:text-white">标签</a>
             <a href="/apps" class="hover:text-white">陈叔叔的软件</a>
@@ -108,63 +108,65 @@ const github = site.github || "";
     </script>
 
     <style>
-      /* 移动端菜单：由上到下展开。
-         高度 0 → auto 用 grid 行高过渡（自动适配内容高度，无需写死 max-height） */
+      /* 移动端菜单：浮层从导航栏下沿滑入。
+         性能关键：只过渡 transform / opacity（合成层属性，交给 GPU），
+         不能用 grid-template-rows / height / max-height 等布局属性——
+         它们每帧都会触发整页重排（reflow），移动端必然掉帧。 */
       .mobile-menu {
-        display: grid;
-        grid-template-rows: 0fr;
-        transition: grid-template-rows 500ms cubic-bezier(0.16, 1, 0.3, 1);
-      }
-      .mobile-menu.is-open {
-        grid-template-rows: 1fr;
+        position: absolute;
+        left: 0;
+        right: 0;
+        top: 100%;
       }
 
-      .mobile-menu__inner {
-        overflow: hidden;
-      }
-
-      /* 内容整体从上方 -14px 平移下来 + 淡入，非线性（快出慢收） */
-      .mobile-menu__inner > div {
-        transform: translateY(-14px);
+      .mobile-menu__panel {
+        background-color: rgba(255, 255, 255, 0.06);
+        -webkit-backdrop-filter: blur(40px);
+        backdrop-filter: blur(40px);
+        border-bottom: 1px solid rgba(255, 255, 255, 0.12);
+        box-shadow: 0 16px 40px rgba(3, 7, 18, 0.45);
+        transform: translateY(-10px);
         opacity: 0;
         visibility: hidden;
+        pointer-events: none;
+        will-change: transform, opacity;
         transition:
-          transform 500ms cubic-bezier(0.16, 1, 0.3, 1),
-          opacity 400ms cubic-bezier(0.16, 1, 0.3, 1),
-          visibility 0s linear 500ms;
+          transform 380ms cubic-bezier(0.16, 1, 0.3, 1),
+          opacity 260ms cubic-bezier(0.16, 1, 0.3, 1),
+          visibility 0s linear 380ms;
       }
-      .mobile-menu.is-open .mobile-menu__inner > div {
+      .mobile-menu.is-open .mobile-menu__panel {
         transform: translateY(0);
         opacity: 1;
         visibility: visible;
+        pointer-events: auto;
         transition:
-          transform 500ms cubic-bezier(0.16, 1, 0.3, 1),
-          opacity 400ms cubic-bezier(0.16, 1, 0.3, 1),
+          transform 380ms cubic-bezier(0.16, 1, 0.3, 1),
+          opacity 260ms cubic-bezier(0.16, 1, 0.3, 1),
           visibility 0s;
       }
 
-      /* 菜单项逐项错峰下滑，强化「由上到下」的层次感 */
-      .mobile-menu__inner > div > a {
+      /* 菜单项逐项错峰滑入（同样只动合成层属性） */
+      .mobile-menu__panel a {
+        transform: translateY(-8px);
         opacity: 0;
-        transform: translateY(-10px);
         transition:
-          transform 500ms cubic-bezier(0.16, 1, 0.3, 1),
-          opacity 400ms cubic-bezier(0.16, 1, 0.3, 1);
+          transform 380ms cubic-bezier(0.16, 1, 0.3, 1),
+          opacity 260ms cubic-bezier(0.16, 1, 0.3, 1);
       }
-      .mobile-menu.is-open .mobile-menu__inner > div > a {
-        opacity: 1;
+      .mobile-menu.is-open .mobile-menu__panel a {
         transform: translateY(0);
+        opacity: 1;
       }
-      .mobile-menu.is-open .mobile-menu__inner > div > a:nth-child(1) { transition-delay: 40ms; }
-      .mobile-menu.is-open .mobile-menu__inner > div > a:nth-child(2) { transition-delay: 80ms; }
-      .mobile-menu.is-open .mobile-menu__inner > div > a:nth-child(3) { transition-delay: 120ms; }
-      .mobile-menu.is-open .mobile-menu__inner > div > a:nth-child(4) { transition-delay: 160ms; }
+      .mobile-menu.is-open .mobile-menu__panel a:nth-child(1) { transition-delay: 50ms; }
+      .mobile-menu.is-open .mobile-menu__panel a:nth-child(2) { transition-delay: 90ms; }
+      .mobile-menu.is-open .mobile-menu__panel a:nth-child(3) { transition-delay: 130ms; }
+      .mobile-menu.is-open .mobile-menu__panel a:nth-child(4) { transition-delay: 170ms; }
 
       /* 尊重系统「减少动态效果」偏好 */
       @media (prefers-reduced-motion: reduce) {
-        .mobile-menu,
-        .mobile-menu__inner > div,
-        .mobile-menu__inner > div > a {
+        .mobile-menu__panel,
+        .mobile-menu__panel a {
           transition-duration: 1ms !important;
           transition-delay: 0ms !important;
         }
