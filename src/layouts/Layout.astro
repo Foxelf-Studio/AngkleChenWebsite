@@ -49,17 +49,21 @@ const github = site.github || "";
           菜单
         </button>
       </div>
-      <div id="mobileMenu" class="mobile-menu md:hidden" aria-hidden="true">
-        <div class="mobile-menu__panel">
-          <div class="flex flex-col gap-3 text-sm text-white/80 max-w-6xl mx-auto px-6 md:px-8 pb-4">
-            <a href="/" class="hover:text-white">文章</a>
-            <a href="/tags" class="hover:text-white">标签</a>
-            <a href="/apps" class="hover:text-white">陈叔叔的软件</a>
-            <a href="/about" class="hover:text-white">关于</a>
-          </div>
+    </nav>
+
+    <!-- 移动端菜单浮层：刻意放在 <nav> 之外。
+         nav 自身带 backdrop-filter，会给后代建立新的 backdrop root，
+         使菜单的 backdrop-filter 只采样 nav 内部 → 页面内容不会被模糊、直接透出来。 -->
+    <div id="mobileMenu" class="mobile-menu md:hidden" aria-hidden="true">
+      <div class="mobile-menu__panel">
+        <div class="flex flex-col gap-3 text-sm text-white/80 max-w-6xl mx-auto px-6 md:px-8 pb-4">
+          <a href="/" class="hover:text-white">文章</a>
+          <a href="/tags" class="hover:text-white">标签</a>
+          <a href="/apps" class="hover:text-white">陈叔叔的软件</a>
+          <a href="/about" class="hover:text-white">关于</a>
         </div>
       </div>
-    </nav>
+    </div>
 
     <main class="pt-16">
       <slot />
@@ -113,18 +117,23 @@ const github = site.github || "";
          不能用 grid-template-rows / height / max-height 等布局属性——
          它们每帧都会触发整页重排（reflow），移动端必然掉帧。 */
       .mobile-menu {
-        position: absolute;
+        position: fixed;
         left: 0;
         right: 0;
-        top: 100%;
+        top: 4rem; /* 紧贴导航栏底部（h-16 = 4rem） */
+        z-index: 30; /* 低于 nav(z-40)、高于页面内容 */
       }
 
       .mobile-menu__panel {
-        background-color: rgba(255, 255, 255, 0.06);
-        -webkit-backdrop-filter: blur(40px);
-        backdrop-filter: blur(40px);
+        /* 深墨底色 + 高不透明度：菜单是覆盖在正文之上的浮层，必须真的能挡住内容。
+           底色取页面背景 #0b1322，与整体夜色一致。 */
+        background-color: rgba(11, 19, 34, 0.88);
+        -webkit-backdrop-filter: blur(20px);
+        backdrop-filter: blur(20px);
         border-bottom: 1px solid rgba(255, 255, 255, 0.12);
-        box-shadow: 0 16px 40px rgba(3, 7, 18, 0.45);
+        box-shadow:
+          0 20px 40px rgba(3, 7, 18, 0.55),
+          inset 0 1px 0 rgba(255, 255, 255, 0.08);
         transform: translateY(-10px);
         opacity: 0;
         visibility: hidden;
