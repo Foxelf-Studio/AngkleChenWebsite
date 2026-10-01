@@ -112,70 +112,43 @@ const github = site.github || "";
     </script>
 
     <style>
-      /* 移动端菜单：浮层从导航栏下沿滑入。
-         性能关键：只过渡 transform / opacity（合成层属性，交给 GPU），
-         不能用 grid-template-rows / height / max-height 等布局属性——
-         它们每帧都会触发整页重排（reflow），移动端必然掉帧。 */
+      /* 移动端菜单：做成导航栏的「向下延伸」。
+         面板与导航栏用同一套玻璃配方，收起时整体藏在导航栏底边上方（被裁掉），
+         展开时整体向下滑出 —— 观感就是「导航栏自己变高、长出菜单」。
+         性能：全程只动 transform（GPU 合成层），不碰 height / grid-template-rows，
+         因此不会逐帧 reflow，移动端不会掉帧。 */
       .mobile-menu {
         position: fixed;
+        top: 4rem; /* 紧接导航栏底边（h-16） */
         left: 0;
         right: 0;
-        top: 4rem; /* 紧贴导航栏底部（h-16 = 4rem） */
-        z-index: 30; /* 低于 nav(z-40)、高于页面内容 */
+        z-index: 30; /* 低于 nav(z-40)，收起时即使溢出也被导航栏压住 */
+        overflow: hidden; /* 收起时裁掉面板 */
+        pointer-events: none;
       }
 
       .mobile-menu__panel {
-        /* 与导航栏完全同一套玻璃配方（bg-white/8 + blur(40px) + saturate(180%)），
-           保证菜单像是导航栏自然延伸下来的一层，视觉连续。 */
+        /* 与导航栏完全同一套玻璃配方，做到无缝衔接 */
         background-color: rgba(255, 255, 255, 0.08);
         -webkit-backdrop-filter: blur(40px) saturate(180%);
         backdrop-filter: blur(40px) saturate(180%);
         border-bottom: 1px solid rgba(255, 255, 255, 0.15);
-        box-shadow: 0 16px 32px rgba(3, 7, 18, 0.4);
-        transform: translateY(-10px);
-        opacity: 0;
-        visibility: hidden;
-        pointer-events: none;
-        will-change: transform, opacity;
-        transition:
-          transform 380ms cubic-bezier(0.16, 1, 0.3, 1),
-          opacity 260ms cubic-bezier(0.16, 1, 0.3, 1),
-          visibility 0s linear 380ms;
+        transform: translateY(-100%);
+        will-change: transform;
+        transition: transform 420ms cubic-bezier(0.16, 1, 0.3, 1);
+      }
+
+      .mobile-menu.is-open {
+        pointer-events: auto;
       }
       .mobile-menu.is-open .mobile-menu__panel {
         transform: translateY(0);
-        opacity: 1;
-        visibility: visible;
-        pointer-events: auto;
-        transition:
-          transform 380ms cubic-bezier(0.16, 1, 0.3, 1),
-          opacity 260ms cubic-bezier(0.16, 1, 0.3, 1),
-          visibility 0s;
       }
-
-      /* 菜单项逐项错峰滑入（同样只动合成层属性） */
-      .mobile-menu__panel a {
-        transform: translateY(-8px);
-        opacity: 0;
-        transition:
-          transform 380ms cubic-bezier(0.16, 1, 0.3, 1),
-          opacity 260ms cubic-bezier(0.16, 1, 0.3, 1);
-      }
-      .mobile-menu.is-open .mobile-menu__panel a {
-        transform: translateY(0);
-        opacity: 1;
-      }
-      .mobile-menu.is-open .mobile-menu__panel a:nth-child(1) { transition-delay: 50ms; }
-      .mobile-menu.is-open .mobile-menu__panel a:nth-child(2) { transition-delay: 90ms; }
-      .mobile-menu.is-open .mobile-menu__panel a:nth-child(3) { transition-delay: 130ms; }
-      .mobile-menu.is-open .mobile-menu__panel a:nth-child(4) { transition-delay: 170ms; }
 
       /* 尊重系统「减少动态效果」偏好 */
       @media (prefers-reduced-motion: reduce) {
-        .mobile-menu__panel,
-        .mobile-menu__panel a {
+        .mobile-menu__panel {
           transition-duration: 1ms !important;
-          transition-delay: 0ms !important;
         }
       }
     </style>
