@@ -1,7 +1,7 @@
 ---
 import Layout from "../../layouts/Layout.astro";
 import { getCollection, render } from "astro:content";
-import { card, btn, tagChip, trans } from "../../lib/glass";
+import { card, btn, tagChip, trans, liquidPaneOff } from "../../lib/glass";
 
 export async function getStaticPaths() {
   const posts = await getCollection("posts");
@@ -30,7 +30,9 @@ function fmt(d: Date) {
           <a href={`/tags/${t}`} class={tagChip}>{t}</a>
         ))}
       </div>
-      <div class={`${card} p-6 md:p-8 mt-8`}>
+      {/* 正文是**独占的信息容器**：页面上没有同层邻居，退位动画无对象。
+          与 /about 同理，只保留跟手高光，不参与邻卡后退。 */}
+      <div class={`${card} ${liquidPaneOff} p-6 md:p-8 mt-8`}>
         <div class="md-body">
           <Content />
         </div>

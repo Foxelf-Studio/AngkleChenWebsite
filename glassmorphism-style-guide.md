@@ -848,3 +848,186 @@ html[data-input="touch"] .liquid-surface {
 应改用起手更缓的 `cubic-bezier(0.4, 0, 0.2, 1)`（标准 ease-in-out），
 它的前段斜率显著更小。**不要**用过渡 `filter` 的方式去补
 （逐帧重算滤镜，昂贵）。
+
+### 12.21 【铁律】「面」与「件」必须分级 —— 后退只作用于 `.liquid-pane`
+
+**这是 2026-10-02 第二轮修复的核心，也是本层最容易反复踩的结构性错误。**
+
+旧实现把 `card` / `btn` / `tagChip` / `platformChip` **全部**标成
+`liquid-surface`，而邻卡后退的选择器写的是 `.liquid-surface:not(:hover)`。
+后果：一张卡片被 hover 时，**卡片内部的标签、下载按钮也被当成"邻卡"
+一起缩小变暗**。
+
+用户截图证据（/apps）：指针落在「陈叔叔希沃优化工具」卡片内，
+「实用工具」「Windows」两个标签与「下载」按钮同时变暗变小，
+"就像是被按下了的状态"。
+
+**语义错误**：零件不是卡片。卡片是「面」（pane），标签与按钮是「件」（part）。
+
+**分级后的契约**：
+
+| 类名 | 语义 | 跟手高光 | 参与邻卡后退（缩小） |
+|---|---|---|---|
+| `.liquid-pane` | 面（卡片、面板） | ✅ | ✅ |
+| `.liquid-surface` | 通用表面（含 pane） | ✅ | ❌（除非同时带 pane） |
+| `.liquid-pane--off` | 面，但本实例退出后退 | ✅ | ❌ |
+
+`liquid.ts` 在 `collect()` 时一次性算好 `isPane`，不在每帧循环里判：
+
+```ts
+isPane: el.classList.contains("liquid-pane")
+     && !el.classList.contains("liquid-pane--off")
+```
+
+**另一个必须同时修的镜像问题**：如果「件」也被当成触发源，
+指针放在**按钮**上也会让全场卡片后退。
+用户原话：「光标放在"看看我做的软件"按钮上时，下面的文章卡片也缩小了」。
+
+所以触发源必须只认 pane：
+```ts
+const paneNow = s.isPane && clientX >= r.left && clientX <= r.right
+                         && clientY >= r.top && clientY <= r.bottom;
+```
+JS 的 `data-focus` 与 CSS 的 `.liquid-pane:not(...)` **共用同一套判定**，
+两者必须同步改 —— 只改一边就会出现"高光跟手但后退不触发"的错位。
+
+**`.liquid-pane--off` 的适用场景**：独占的信息容器，
+页面上没有同层邻居，退位动画无对象、只会让自己读起来在抖。
+目前用于 `/about` 的介绍卡与 `/post/[slug]` 的正文卡。
+用户原话：「/about 中那个卡片是展示信息的，不用做退位动画，
+只需要有个光跟着指针就行了」。
+
+**不要用 `.liquid-pane--off` 去关掉整组卡片** —— 网格里的
+兄弟卡片（`/`、`/apps`、`/tags`）就应该互相后退，那是本效果的本体。
+
+### 12.22 【铁律】后退判定的容差必须是 **0**，高光判定才允许小外扩
+
+第二轮用户报障：「指针尚未靠近卡片，就触发了缩小动画」——
+在主页、/apps、/tags、/about 都存在。
+
+**根因**：上一版用**同一个** `INSIDE_PX = 6` 同时喂给两个语义不同的判定：
+- a) 元素自身高光点亮 —— 希望"贴到边缘就亮"，需要一点容差；
+- b) 邻卡后退的触发源 —— 必须是"指针真的落在这一块面上"，**零容差**。
+
+相邻两张卡之间只有 `gap-6 = 24px`。两边各外扩 6px 后，
+中间 **12px 宽**的一条带**同时**属于两张卡的"内部" ——
+指针走在缝里就把 `data-focus` 打开了，全场卡片一起缩小。
+
+**正确做法拆成两个常量**：
+
+```ts
+const LIT_EDGE_PX = 2;   // 高光：只留边框外半像素 + 亚像素抖动
+// 后退：零容差，严格 containment，不设常量、直接比较
+```
+
+`LIT_EDGE_PX = 2` 的依据：本站最小控件间距是 `gap-2 = 8px`，
+2px 外扩在 8px 间距下仍留 4px 中性地带，
+不会出现"两个相邻标签同时点亮"的粘连。
+
+**实测边界值**（四页一致，改动前是各向 6.0px 且间隙误触发）：
+
+| 页面 | 上 | 下 | 左 | 右 |
+|---|---|---|---|---|
+| `/` | 6.0px | 6.0px | 6.0px | 6.0px |
+| `/tags` | 6.0px | 6.0px | 6.0px | 6.0px |
+| `/apps` | 6.0px | 6.0px | 6.0px | 6.0px |
+| `/about` | 6.0px | 6.0px | 6.0px | 6.0px |
+
+**通用教训**：**一个容差常量不能服务两种语义**。
+凡是要用"外扩 N 像素"的地方，先问它属于「视觉可达性」还是
+「逻辑命中」—— 前者可外扩，后者必须精确。
+
+### 12.23 【铁律】触屏的 `pointercancel` 要**容忍**，且不得用 `setPointerCapture`
+
+第二轮用户报障：「滑动屏幕滚动时，高光闪一下就消失了，
+具体是按下出现，手指移动就消失」。
+
+**根因链**：指针落在可滚动区域 → 浏览器要把这次触摸判给「滚动」
+→ 发 `pointercancel` → 旧代码 `pointercancel → onPointerUp` 把 `pressed`
+置 false → 高光熄灭。
+
+**第一版修法是错的**：用了 `setPointerCapture` 想锁住指针。
+- 捕获会把指针"钉在元素上"，浏览器不再把它算作 scroll gesture，
+  **页面反而滚不动** —— 直接违反用户明确要求「页面也正常动」；
+- 更糟的是部分浏览器在页面开始滚动时**仍会**发 `pointercancel`，
+  高光照样熄灭。等于两头都没解决。
+
+**正确做法（两个都要，缺一不可）**：
+
+① CSS：在**元素级别**把垂直轴让给浏览器，不靠捕获：
+```css
+html[data-input="touch"] .liquid-surface {
+  touch-action: pan-y pinch-zoom;
+}
+```
+垂直滚动与双指缩放仍归浏览器（页面天然可滚），横向拖动留给页面。
+
+② JS：**重新定义 `pointercancel` 的语义** —— 只解除"当前活跃指针"的
+跟踪，**不关掉高光**：
+```ts
+const onPointerCancel = (e: PointerEvent) => {
+  if (activeId !== null && e.pointerId !== activeId) return;
+  activeId = null;
+  // pressed 保持 true：高光停在最后位置，等下一条 pointermove 继续跟随
+  wake();
+};
+```
+
+③ **必须补上 `touchend` / `touchcancel` 来真正收尾**。
+既然 `pointercancel` 已被"宽松化"，抬手这件事就没人管了 ——
+若不补，高光会在松手后一直亮着。用 `touchend` 作为**最终**信号
+（它也一定会来，与 `pointerup` 互为冗余）：
+```ts
+const endTouch = () => {
+  if (hasHover) return;   // 桌面端不碰（混合设备可能误报触摸事件）
+  pressed = false;
+  clearFocus();
+  wake();
+};
+window.addEventListener("touchend", endTouch, { passive: true });
+window.addEventListener("touchcancel", endTouch, { passive: true });
+```
+
+**为什么敢容忍 `pointercancel`**：实践上无法区分「被滚动手势接管」
+与「指针真的从系统消失」。两害相权：
+- 若因一次滚动就熄灭高光 → 用户明确报障的问题；
+- 若极端情况下高光多停留一会儿 → 有 700ms 淡出，
+  且下一次 `pointerdown` 立即重置，观感无感。
+
+**实测证据**（390×844 触屏模拟，钉住同一张卡片采样）：
+
+```
+初始:   --lite=0
+按下:   --lite=1                      ev= pointerdown
+拖动中: --lite=1  --mx 持续变化        ev= pointerdown,pointermove,pointermove,pointercancel
+抬手:   --lite=0
+```
+
+`pointercancel` 出现 1 次而高光**全程保持点亮** —— 正是所需行为。
+另测：竖向滑动 scrollY `0→165`（页面照常滚），横向滑动 scrollY 保持 `0`。
+
+### 12.24 【排查陷阱】`ReferenceError` 会让"后半段赋值"静默失效
+
+本轮定位过程中遇到一个极隐蔽的 bug，值得单独记一条。
+
+**现象**：`--mx` 正常写入并跟随指针，但同一段代码里 20 行之后的
+`--lite` **永远是空字符串**（连 `0` 都不是）。所有高光全部失效。
+
+**根因**：循环里写成了裸 `isPane`，而变量实际是 `s.isPane`。
+`isPane` 未定义 → 抛 `ReferenceError` → 该元素循环体**中断**。
+由于 `--mx` 的写入在抛错点**之前**，`--lite` 在**之后**，
+于是表现为"一半生效、一半静默失效"。
+
+**为什么难查**：模块级的 rAF 循环里抛错不会冒泡到控制台显眼位置，
+且**下一帧仍会重新开始**，所以看起来"动画在跑、只是某个属性没生效"。
+
+**教训**：
+- 自定义属性**一个都没写** → 多半是循环前就挂了（选择器/收集阶段）；
+- **前几个写了、后面的没写** → 强烈怀疑**中途抛异常**，
+  用 CDP `Runtime.evaluate` 逐个属性读 `el.style.getPropertyValue()`
+  比看视觉结果快得多（视觉上"高光没亮"会误导到 CSS 侧去查）。
+- TypeScript 的 `strict` 未必拦得住这类循环内变量名笔误，
+  **`astro check` 要跑**（注意需 `--max-old-space-size=6144`，
+  `public/admin` 里 TinaCMS 打包的巨型 JS 会 OOM）。
+
+## 附：修复记录（续）

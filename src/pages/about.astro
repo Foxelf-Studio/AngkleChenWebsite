@@ -1,7 +1,7 @@
 ---
 import Layout from "../layouts/Layout.astro";
 import { getEntry, render } from "astro:content";
-import { card } from "../lib/glass";
+import { card, liquidPaneOff } from "../lib/glass";
 
 const about = await getEntry("about", "about");
 const email = about?.data.email ?? "";
@@ -13,7 +13,7 @@ const { Content } = about ? await render(about) : { Content: null };
   <section class="py-16 md:py-24 px-6 md:px-8">
     <div class="max-w-3xl mx-auto fade-in">
       <h1 class="font-semibold text-white text-3xl md:text-5xl">关于陈叔叔</h1>
-      <div class={`${card} p-6 md:p-8 mt-10`}>
+      <div class={`${card} ${liquidPaneOff} p-6 md:p-8 mt-10`}>
         <div class="md-body">
           {Content && <Content />}
         </div>

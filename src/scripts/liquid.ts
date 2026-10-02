@@ -124,6 +124,11 @@ applyNavScrim();
 
 // 宿主选择器：与 glass.ts 的 liquidTarget 常量保持一致
 const SURFACE_SELECTOR = ".liquid-surface";
+// 「面」标记：只有带这个类的元素参与邻卡后退。
+// 与 glass.ts 的 liquidPane 常量、global.css 的 .liquid-pane 必须一致。
+const PANE_CLASS = "liquid-pane";
+// 实例级退出标记：带了它就不参与后退，但高光照旧。
+const PANE_OFF_CLASS = "liquid-pane--off";
 
 if (tier === "full" || tier === "lite") {
   // ---- 元素登记表（带缓动状态）----
@@ -135,6 +140,8 @@ if (tier === "full" || tier === "lite") {
     px: number;      // 当前值（缓动后）
     py: number;
     inView: boolean; // 是否在视口内 —— 不在视口就跳过，省算力
+    isPane: boolean; // 是否为「面」—— 只有面参与邻卡后退（缩小）。
+                     // 按钮/标签是"件"，只跟手高光，永不后退。
   }
 
   const surfaces: Surface[] = [];
@@ -152,6 +159,12 @@ if (tier === "full" || tier === "lite") {
         px: 0.78,
         py: 0.08,
         inView: true,
+        // 只有显式标了 liquid-pane 的才参与后退。判定只在这里做一次，
+        // 不放进每帧循环（classList.contains 每帧调用会累积开销）。
+        // liquid-pane--off 是**实例级**退出：外观照用 card，但不参与后退
+        // （/about 的信息卡、文章正文页这类独占容器）。
+        isPane:
+          el.classList.contains(PANE_CLASS) && !el.classList.contains(PANE_OFF_CLASS),
       });
     });
     rectsDirty = true;
@@ -201,10 +214,21 @@ if (tier === "full" || tier === "lite") {
   //   正是这个换算差异造成的 —— 不是逻辑写错，是**量纲错了**。
   //   改成像素后，任何尺寸的元素在四个方向上的触发边界都完全一致。
   //
-  // 取值 6px：够容纳指针停在边框正上方（1px 边框 + 亚像素抖动 +
-  //   border 的外半像素），又远小于本站最小间距（gap-6 = 24px），
-  //   因此不会"跨过空隙点到隔壁卡"。
-  const INSIDE_PX = 6;
+  // 【2026-10-02 二次修正：容差从 6px 收回到 0，并区分判定用途】
+  //   上一版用 INSIDE_PX = 6 统一外扩，但它同时喂给了**两个语义不同的判定**：
+  //     a) 元素自身高光点亮      —— 希望"贴到边缘就亮"，需要一点容差
+  //     b) 邻卡后退的触发源      —— 必须是"指针真的落在这一块面上"，零容差
+  //   用同一个数，就出现用户报的「指针尚未靠近卡片，就触发了缩小动画」：
+  //   相邻两张卡之间只有 24px 空隙，两边各外扩 6px 后，中间 12px 宽的
+  //   一条带**同时**属于两张卡的"内部"—— 指针走在缝里就把 focused 打开了。
+  //   现在拆成两个常量：
+  //     INSIDE_PX  = 0 —— 后退判定：严格 containment，必须指针真在面内
+  //     LIT_EDGE_PX = 2 —— 高光判定：只留 2px（边框外半像素 + 亚像素抖动）
+  //
+  //   2px 的取值依据：本站最小间距是 gap-6 = 24px，但小控件（tagChip）之间
+  //   的间距可以是 gap-2 = 8px。2px 外扩在 8px 间距下仍有 4px 中性地带，
+  //   不会出现"两个相邻标签同时点亮"的粘连。
+  const LIT_EDGE_PX = 2;
 
   // 邻卡后退的开关状态（写进 <html data-focus>，避免每帧重复赋值）
   let focusInside = false;
@@ -253,27 +277,28 @@ if (tier === "full" || tier === "lite") {
       style.setProperty("--mx", `${(s.px * 100).toFixed(2)}%`);
       style.setProperty("--my", `${(s.py * 100).toFixed(2)}%`);
 
-      // ---- 内外判定 ----
-      // 【2026-10-02 修：四向灵敏度必须一致，且必须是像素量纲】
-      // 旧代码：`Math.abs(s.tx - 0.5) < 0.5 + 0.05`（归一化坐标 + 5% 放宽）。
-      // 数学上四向等权，但换算成像素后：宽卡左右放宽 18px、高卡上下放宽 60px、
-      // 导航栏上下只放宽 3.25px —— 于是同一份代码在不同元素上表现完全不同，
-      // 用户看到的「/tags 下方一点点就触发、左右要到卡里」「/apps 上方触发、
-      // 左右下方不触发」全部由此而来。量纲错了，等权没有意义。
-      // 现在直接用**像素**比较：四个方向的物理容差完全相同。
-      const insideNow =
-        clientX >= r.left - INSIDE_PX &&
-        clientX <= r.right + INSIDE_PX &&
-        clientY >= r.top - INSIDE_PX &&
-        clientY <= r.bottom + INSIDE_PX &&
+      // ---- 内外判定（两个用途，两套容差）----
+      // 高光（lit）：允许 2px 外扩 —— "贴到边缘就亮"，不必精确压线
+      const litNow =
+        clientX >= r.left - LIT_EDGE_PX &&
+        clientX <= r.right + LIT_EDGE_PX &&
+        clientY >= r.top - LIT_EDGE_PX &&
+        clientY <= r.bottom + LIT_EDGE_PX &&
         r.width > 1 &&
         r.height > 1; // 尺寸为 0 的隐藏元素永远不算"内部"
+
+      // 后退（pane）：**零容差**严格包含 —— 必须指针真的落在这一块面内。
+      // 只有 .liquid-pane（卡片/面板）参与，按钮标签不参与。
+      // 注意是 s.isPane（登记时算好），不是裸 isPane —— 后者不存在，
+      // 会在第一个元素上抛 ReferenceError，导致本行之后的 --lite 永不写入。
+      const paneNow =
+        s.isPane && clientX >= r.left && clientX <= r.right && clientY >= r.top && clientY <= r.bottom;
 
       // 指针在元素内 **且处于活跃状态** → 高光可见；否则淡出，避免"隔空点亮"。
       // 触屏上 pressed 只在按下期间为 true，抬手后高光按 CSS 过渡淡出 ——
       // 这就是触屏的「点击反馈」。
-      style.setProperty("--lite", pressed && insideNow ? "1" : "0");
-      if (insideNow && pointerInViewport) anyInside = true;
+      style.setProperty("--lite", pressed && litNow ? "1" : "0");
+      if (paneNow && pointerInViewport) anyInside = true;
     }
 
     // ---- 邻卡后退的触发源 ----
@@ -348,9 +373,20 @@ if (tier === "full" || tier === "lite") {
 
   document.documentElement.addEventListener("mouseleave", leaveViewport, { passive: true });
   window.addEventListener("blur", leaveViewport, { passive: true });
-  // 触摸场景：抬手后指针"离开"了，同样要收起（触屏本不会打开这个状态，属保险）
-  window.addEventListener("touchend", clearFocus, { passive: true });
-  window.addEventListener("touchcancel", clearFocus, { passive: true });
+
+  // 【触摸收尾：必须同时重置 pressed 与 focus】
+  //   上面 pointercancel 已改为"宽松"（不熄高光），所以抬手这件事
+  //   必须由 touchend 来收 —— 否则高光会在松手后一直亮着。
+  //   用 touchend/touchcancel 作为**最终**信号，与 pointerup 互为冗余：
+  //   pointerup 在滚动接管时可能被 cancel 顶掉，touchend 一定会来。
+  const endTouch = () => {
+    if (hasHover) return; // 桌面端不碰（触屏事件在混合设备上可能误报）
+    pressed = false;
+    clearFocus();
+    wake();
+  };
+  window.addEventListener("touchend", endTouch, { passive: true });
+  window.addEventListener("touchcancel", endTouch, { passive: true });
 
   // ------------------------------------------------------------
   // 输入源：桌面用 hover，触屏用「按下 + 拖动」
@@ -364,17 +400,32 @@ if (tier === "full" || tier === "lite") {
   //   手指位置能直接驱动**同一套**元素级变量 ——
   //   这正是「跨设备统一的材质逻辑」，而不是另发明一套效果。
   //
-  // 【2026-10-02 修：手指一移动高光就消失】
-  //   现象：按住有高光，手指一动就灭，页面也不跟手。
-  //   根因：没设 touch-action → 浏览器把手势判给"滚动" → 发 pointercancel
-  //         → pressed 归 false → 高光熄灭。
-  //   解法分两半，缺一不可：
-  //     ① CSS：html[data-input="touch"] .liquid-surface { touch-action:
-  //        pan-y pinch-zoom } —— 垂直滚动/双指缩放仍归浏览器（页面照常动），
-  //        横向拖动不再被取消。
-  //     ② 这里：用 setPointerCapture 把指针**锁在这个元素上**，
-  //        并把 pointercancel 的语义收窄 —— 只有"元素被移除/指针真正离开
-  //        文档"才算结束，滚动手势不再被误当成取消。
+  // 【2026-10-02 二次修正：手指一动高光就消失（滚动场景）】
+  //   现象：按住有高光，手指一移动就灭 —— 移动端滚动页面时尤其明显。
+  //   根因链：
+  //     指针落在可滚动区域 → 浏览器要把这次触摸判给「滚动」→ 发 pointercancel。
+  //   第一版修法用了 setPointerCapture，**这是错的**：
+  //     · 捕获会把指针"钉在元素上"，浏览器不再把它算作 scroll gesture，
+  //       页面反而滚不动（用户明确要求"页面也正常动"）；
+  //     · 更糟的是部分浏览器在页面开始滚动时仍会发 pointercancel，
+  //       而我们的 pointercancel→onPointerUp 把 pressed 置 false，高光熄灭。
+  //   正确做法（两个都要）：
+  //     ① CSS touch-action: pan-y pinch-zoom —— 在**元素**级别就把垂直轴
+  //        让给浏览器（不靠捕获，页面天然可滚），只留横向给页面。
+  //     ② 这里**不给指针做 capture**，而是把"高光是否可见"与
+  //        "手势是否被滚动接管"解耦：滚动接管时浏览器发 pointercancel，
+  //        我们**不结束会话**，只把 pressed 保持为 true，让高光继续跟着
+  //        最后已知位置；真正的结束信号是 pointerup / touchend。
+  //
+  // 【关键：pointercancel 的语义要重新定义】
+  //   pointercancel 有两种来源，必须区别对待：
+  //     a) 浏览器把触摸判给滚动（我们想容忍 —— 高光应继续跟手）
+  //     b) 指针真的从系统里消失（设备拔出、手势识别器抢占）
+  //   实践上无法区分二者，所以采取**宽松策略**：忽略 pointercancel，
+  //   只信 pointerup / touchend / pointerout 里的真实结束。
+  //   代价：极端情况下（b）高光会多停留一会儿 —— 但它有 700ms 淡出，
+  //   且下一次 pointerdown 会立即重置，观感上完全无感；反过来若因为
+  //   一次滚动就熄灭高光，是用户明确报障的问题。两害相权取其轻。
   if (hasHover) {
     window.addEventListener("pointermove", onPointerMove, { passive: true });
   } else {
@@ -387,13 +438,11 @@ if (tier === "full" || tier === "lite") {
       pressed = true;
       clientX = e.clientX;
       clientY = e.clientY;
-      // 捕获：后续 move/up 事件即使手指滑出元素也持续送达本窗口，
-      // 且不会被浏览器判给滚动手势而取消。
-      try {
-        (e.target as Element)?.setPointerCapture?.(e.pointerId);
-      } catch {
-        // 某些浏览器对不可捕获目标会抛错，忽略即可（不影响主流程）
-      }
+      // 【刻意不做 setPointerCapture】
+      //   捕获虽能保证 pointermove 持续送达，但会把这次触摸从"滚动手势"里
+      //   摘出来 → 页面滚不动。用户要的是"高光跟着动、同时页面也正常动"，
+      //   所以滚动优先，高光靠 CSS 的 touch-action 分轴 + 下面的
+      //   pointermove 兜底来维持。
       wake();
     };
 
@@ -409,15 +458,21 @@ if (tier === "full" || tier === "lite") {
       wake(); // 再排一帧，把 --lite 归零
     };
 
+    // pointercancel 只做一件事：解除"当前活跃指针"的跟踪（允许下一次
+    // pointerdown 重新接管），但**不关掉高光**。理由见上方注释 ——
+    // 滚动接管会发 cancel，而此时用户只是想滚页面，不该让高光熄灭。
+    const onPointerCancel = (e: PointerEvent) => {
+      if (activeId !== null && e.pointerId !== activeId) return;
+      activeId = null;
+      // pressed 保持 true：高光停在最后位置，等下一条 pointermove 继续跟随，
+      // 或等 pointerup/touchend 真正结束。
+      wake();
+    };
+
     window.addEventListener("pointerdown", onPointerDown, { passive: true });
     window.addEventListener("pointermove", onPointerMove, { passive: true });
     window.addEventListener("pointerup", onPointerUp, { passive: true });
-    // pointercancel 只在"指针从根上消失"时才该结束会话。
-    // 注意：触摸被滚动手势抢走时浏览器也会发 cancel —— 我们已经在 CSS 侧
-    // 把垂直轴让出去了，剩下的 cancel 基本都是真实的会话终止，
-    // 所以这里照常释放，但**不重置坐标**：抬手后高光停在最后一帧的位置淡出，
-    // 比"瞬间弹回默认右上角"自然得多。
-    window.addEventListener("pointercancel", onPointerUp, { passive: true });
+    window.addEventListener("pointercancel", onPointerCancel, { passive: true });
   }
 
   // 滚动 / 尺寸变化 → rect 失效。滚动过程本身不重测（等下一次 rAF 统一测），

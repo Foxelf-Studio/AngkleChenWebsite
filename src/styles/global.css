@@ -360,10 +360,29 @@ html[data-liquid="on"]:not([data-modal="open"]) .page-shell {
 /* 后退配方：缩小 + 变暗 + 去饱和，三者同时、同曲线、700ms。
    为什么是 700ms：用户反馈"变暗和恢复太快，像突然变化"。
    实测 500ms 配 cubic-bezier(0.16,1,0.3,1) 时，前 30% 就走完 80% 的路程，
-   肉眼读作硬切。700ms 把整段摊开，缓出的尾巴更长，观感才是"退下去"。 */
-html[data-liquid="on"][data-focus="inside"] .liquid-surface:not(:hover) {
-  /* 特异性 (0,3,1)/(0,3,0)：高于所有 Tailwind hover: 工具类（(0,2,0)），
-     保证邻卡不会"一边后退一边又按 hover 样式放大回来"。 */
+   肉眼读作硬切。700ms 把整段摊开，缓出的尾巴更长，观感才是"退下去"。
+
+   【2026-10-02 二次修正：后退只作用于 "面"(liquid-pane)，不作用于 "件"】
+   旧选择器是 `.liquid-surface:not(:hover)`，而 card / btn / tagChip /
+   platformChip 全都带 liquid-surface —— 于是 hover 一张卡片时，
+   卡片**内部的**标签与下载按钮也被选为"邻卡"一起缩小变暗。
+   用户截图（/apps）：「实用工具」「Windows」标签与「下载」按钮同时
+   变暗变小，像被按住一样。这是语义错误：零件不是卡片。
+
+   现在改为只作用于 .liquid-pane，并加两条排除：
+     · :not(:hover)                    —— 焦点面自己不动
+     · :not(:has(.liquid-pane:hover))  —— 焦点在**内部嵌套面**时，
+                                          外层容器也不后退
+   同理，若指针停在**卡片内的标签/按钮**上（.liquid-surface hover），
+   该卡片仍然是"当前操作层"，不应该跟着退 —— 由 JS 侧的
+   data-focus 判定负责（它认的是 pane 的 insideNow，见 liquid.ts）。
+
+   另外排除菜单/下拉里的面：它们是浮层，不是同层选项。 */
+html[data-liquid="on"][data-focus="inside"]
+  .liquid-pane:not(.liquid-pane--off):not(:hover):not(:has(.liquid-pane:hover)):not(.liquid-pane--float) {
+  /* 特异性 (0,2,0)+(0,1,0)+(0,1,0)+(0,1,0)+(0,1,0) = (0,6,0)。
+     高于所有 Tailwind hover: 工具类（(0,2,0)），
+     也高于下面各条豁免，保证"后退"永远压得住"回位"。 */
   transform: scale(0.955);
   opacity: 0.45;
   filter: saturate(0.5);
@@ -380,33 +399,29 @@ html[data-liquid="on"][data-focus="inside"] .liquid-surface:not(:hover) {
    而且它一旦 scale(0.955)，整条吸顶栏会向内缩、边缘露出底色。
 
    【特异性必须对得上，否则豁免无效】
-   上面那条退避规则的实际特异性是：
-     html[data-liquid][data-focus]  → (0,2,0)
-     .liquid-surface                → (0,1,0)
-     :not(:hover)                   → (0,1,0)   ← :not() 取括号内选择器的权重
-     合计 (0,4,0)
-   所以这里的兜底规则**也必须凑到 (0,4,0)** 才能靠"更靠后"取胜。
-   只写 `.glass-nav`（(0,3,0)）是**压不过**的 —— 实测确认导航栏被缩到 0.955、
-   宽度从 1265 掉到 1208，即本条豁免完全失效。
-   做法：给兜底也加上 `:not(:hover)`，凑成同样的 (0,4,0)。
-   （用 .glass-nav 的 :not 变体而不是直接写 !important ——
-     后者会破坏其他状态覆盖链。） */
-html[data-liquid="on"][data-focus="inside"] .glass-nav:not(:hover),
-html[data-liquid="on"][data-focus="inside"] .glass-nav:hover,
-html[data-liquid="on"][data-focus="inside"] .liquid-switch__track:not(:hover) {
+   历史上踩过坑：上面那条退避规则当时是 (0,4,0)，而豁免只写了
+   `.glass-nav`（(0,3,0)）→ **压不过**，实测导航栏被缩到 0.955、
+   宽度从 1265 掉到 1208，豁免完全失效。
+   现在退避规则本身已提到 (0,6,0)，且加了 :not(.liquid-pane--float)，
+   所以这些元素**根本不需要 scale 兜底** —— 它们不是 .liquid-pane。
+   这条仅保留作保险：万一将来有人给导航栏误加了 liquid-pane；
+   特异性特意凑到 (0,7,0) 以确保能压回去。
+   （不写 !important，避免破坏其他状态覆盖链。） */
+html[data-liquid="on"][data-focus="inside"] .glass-nav.liquid-pane:not(:hover),
+html[data-liquid="on"][data-focus="inside"] .glass-nav.liquid-pane:hover,
+html[data-liquid="on"][data-focus="inside"] .liquid-switch__track.liquid-pane:not(:hover) {
   transform: none;
   opacity: 1;
   filter: none;
 }
 
-/* 还原态：退出后回到原位。这条同时**覆盖掉 cardHover 自带的
-   `hover:-translate-y-0.5`** —— 这也是用户反馈「卡片上移没去掉」的根治：
-   与其去改 cardHover（那是全站卡片的既有 hover 语言），不如在这里
-   统一改写 transform。注意必须同时列出 :not(:hover)，
-   否则指针在 gap 时，未 hover 的卡会走 @layer utilities 的默认
-   transform 值（none），也是对的 —— 所以这条只用来兜住"从后退态回位"。 */
+/* 还原态：退出后回到原位。
+   注意这里**只给 .liquid-pane 兜底**（件本就不会被后退，不需要兜）。
+   这条同时覆盖掉 cardHover 自带的 `hover:-translate-y-0.5` —— 这也是
+   用户反馈「卡片上移没去掉」的根治：与其去改 cardHover（那是全站卡片的
+   既有 hover 语言），不如在这里统一接管 transform。 */
 @media (hover: hover) and (pointer: fine) {
-  html[data-liquid="on"] .liquid-surface {
+  html[data-liquid="on"] .liquid-pane {
     transition:
       transform 700ms cubic-bezier(0.16, 1, 0.3, 1),
       opacity 700ms cubic-bezier(0.16, 1, 0.3, 1),
