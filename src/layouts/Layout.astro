@@ -222,6 +222,27 @@ const github = site.github || "";
           0 8px 32px rgba(3, 7, 18, 0.45),
           inset 0 1px 0 rgba(255, 255, 255, 0.2),
           inset 0 -1px 0 rgba(2, 6, 16, 0.35);
+
+        /* ---- 底边柔和化开（mask） ----
+           固定导航栏盖住滚动内容时，底边会形成一道"硬切"：线之上被模糊、
+           线之下锐利，同一行字被拦腰切断。这是所有半透明固定导航栏的通病。
+           用 mask 让玻璃在最后 14px 渐隐，边界"化开"而不是切断 ——
+           更接近 Apple Liquid Glass 的柔和边缘。
+           范围取 50px→64px（仅最后 14px）：导航栏文字垂直居中在 y≈23~41，
+           完全不受影响。
+           不支持 mask-image 的浏览器会忽略这两条，退化为原来的硬边，无副作用。 */
+        -webkit-mask-image: linear-gradient(
+          to bottom,
+          #000 0px,
+          #000 50px,
+          transparent 64px
+        );
+        mask-image: linear-gradient(
+          to bottom,
+          #000 0px,
+          #000 50px,
+          transparent 64px
+        );
       }
 
       /* ---- 真·折射：backdrop-filter 引用 SVG 滤镜 ----
