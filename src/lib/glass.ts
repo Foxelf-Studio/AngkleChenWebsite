@@ -31,3 +31,30 @@ export const platformChip =
 
 export const trans =
   "transition-all duration-500 ease-[cubic-bezier(0.16,1,0.3,1)]";
+
+// ============================================================
+// Liquid Glass 扩展层（beta/liquid-glass）
+// ============================================================
+// 【设计原则】"液态感"由「指针跟手的高光」承担，不由模糊承担。
+//   —— 所以下面这些常量**全部不含 backdrop-filter / filter:url()**，
+//      继续遵守本文件开头的三条铁律，从物理上排除「相邻卡片亮带」。
+//
+// 【变量契约】由 src/scripts/liquid.ts 在**各元素自身**的 style 上写入：
+//   --mx / --my  指针相对该元素的归一化坐标（0%~100%），经 lerp 缓动 → 高光"追着"指针走
+//   --lite       指针是否在该元素内（1/0），元素外时高光淡出
+//   --sheen-t    高光整体强度（0~1），由 html[data-glass] 档位决定
+
+/** 高光跟随层：叠在玻璃表面之上的一枚椭圆光斑
+ *  - 用 ::after 承载，避免污染元素自身 background-image（card 已占用）
+ *  - mix-blend-mode: screen 让高光只做「加光」，不改变底色相位 */
+export const liquidSheen = "liquid-sheen";
+
+/** 元素开启跟手能力的门闩：JS 只负责写变量，样式全在这两个 class 里 */
+export const liquidTarget = "liquid-surface";
+
+/** 紧凑高光半径修饰：小控件（按钮/chips）搭配 liquidSheen 使用，
+ *  避免大半径光斑把整个小元素点亮成一块白 */
+export const liquidTight = "liquid-sheen--tight";
+
+/** 便捷组合：卡片类元素一次性拿到「开启跟手 + 液态高光」 */
+export const liquid = `${liquidTarget} ${liquidSheen}`;

@@ -156,6 +156,111 @@ body {
   color: rgba(255, 255, 255, 0.75);
 }
 
+/* ============ Liquid Glass 液态层 ============ */
+/*
+   设计原则：液态感 = 「有粘滞感的跟手高光」，不是「更模糊的玻璃」。
+   因此本层完全不使用 backdrop-filter / filter:url()，
+   从而在物理上不可能重演「模糊核越界采样相邻卡片亮边框 → 亮带」的历史 bug。
+
+   【关键：变量是"元素级"的，不是全局的】
+   --mx / --my 写在各元素**自身**的 style 上，由 src/scripts/liquid.ts 按
+   「指针相对该元素的坐标」逐元素计算。若写成全局变量，所有卡片会共享一套坐标，
+   表现为"一个全局光源把所有卡片一起照亮"—— 这就不是液态玻璃了。
+*/
+
+.liquid-surface {
+  /* 建立独立合成层：高光是纯 opacity 动画，提前提升避免重绘扩散到相邻元素 */
+  isolation: isolate;
+  /* 【不要在这里设 position】
+     曾写成 position: relative 作为 ::after 的锚点，但它会顶掉 Tailwind 的
+     定位工具类（.fixed/.absolute 在 @layer utilities，层叠优先级低于普通规则）
+     → 导航栏 fixed 失效、跟着页面滚走（2026-10-01 实际踩到）。
+     锚点改由 .liquid-sheen 用「:where() 零特异性」方式补，不再污染通用类。 */
+
+  /* 未启用 JS 时的默认光位：元素右上（与 body 背景主光斑同向） */
+  --mx: 78%;
+  --my: 8%;
+  /* 元素内高光强度：由 html[data-glass] 档位覆盖 */
+  --sheen-t: 1;
+  /* 指针是否在该元素内：1 亮 / 0 灭，由 JS 写 */
+  --lite: 1;
+}
+
+/* 高光锚点：给宿主补 relative，让 ::after 的 inset:0 有定位参照。
+   【关键】用 :where() 把整条选择器的特异性压到 0 ——
+   这样它永远弱于任何 Tailwind 工具类（.fixed/.absolute/.sticky），
+   定位类照常生效，不会被这里的 relative 顶掉。
+   （曾把 position: relative 直接写在 .liquid-surface 里 → 特异性高于
+    @layer utilities 里的 .fixed → 导航栏滚走，2026-10-01 踩过。） */
+:where(.liquid-sheen) {
+  position: relative;
+}
+
+/* 但导航栏/浮层这类自带定位的元素必须豁免：
+   它们不能变成 relative。这里用等特异性但更靠后的规则覆盖回去。
+   选中条件：宿主是 .glass-nav（显式 fixed）。 */
+.liquid-sheen.glass-nav {
+  position: fixed;
+}
+
+/* 高光斑：椭圆、低强度、跟随该元素自己的 --mx/--my */
+.liquid-sheen::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit; /* 跟随宿主的圆角，卡片/按钮/Modal 通用 */
+  pointer-events: none;
+  z-index: 1;
+  /* 只有指针在本元素内才点亮 —— 这是"光标下方那块玻璃被照亮"的物理感来源。
+     calc 相乘比透明度分支更好：opacity 仍走合成层，可被过渡。 */
+  opacity: calc(var(--lite) * var(--sheen-t));
+  /* screen 混合：高光只做加光，不改变底色本身，玻璃才保持"无色" */
+  mix-blend-mode: screen;
+  background-image: radial-gradient(
+    240px circle at var(--mx) var(--my),
+    rgba(255, 255, 255, 0.14),
+    rgba(255, 255, 255, 0.05) 40%,
+    transparent 72%
+  );
+  /* 只过渡 opacity，位置变化由 JS 每帧写入，不参与 CSS 过渡 */
+  transition: opacity 500ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+/* 紧凑版：小控件（按钮 / chips）用更小半径，避免整块被点亮 */
+.liquid-sheen--tight::after {
+  background-image: radial-gradient(
+    110px circle at var(--mx) var(--my),
+    rgba(255, 255, 255, 0.18),
+    rgba(255, 255, 255, 0.04) 45%,
+    transparent 70%
+  );
+}
+
+/* 【关键】宿主的直接子内容必须浮在高光之上，否则会被高光盖住变糊 */
+.liquid-sheen > * {
+  position: relative;
+  z-index: 2;
+}
+
+/* ---- 降级分级：由 liquid.ts 检测后写 <html data-glass="…"> ---- */
+
+/* static（prefers-reduced-motion）：关动效，留材质。reduce 管的是"动"，不是"美" */
+html[data-glass="static"] .liquid-surface {
+  --sheen-t: 0.35;
+}
+
+/* fallback（不支持 backdrop-filter / SVG filter）：纯静态材质，高光固定在右上 */
+html[data-glass="fallback"] .liquid-surface {
+  --mx: 78%;
+  --my: 8%;
+  --sheen-t: 0.6;
+}
+
+/* lite（saveData / 低内存）：降低高光强度，减轻合成负担 */
+html[data-glass="lite"] .liquid-surface {
+  --sheen-t: 0.7;
+}
+
 /* ============ 动效 ============ */
 .fade-in {
   animation: fadeUp 600ms cubic-bezier(0.16, 1, 0.3, 1) both;

@@ -1,0 +1,232 @@
+---
+// ============================================================
+// 图片灯箱（Liquid Glass · 阶段 3 验证版）
+// ============================================================
+// 设计要点：
+//   1. 遮罩层用 backdrop-filter 模糊整页正文 —— 这是本站唯一「模糊有真实收益」
+//      的全屏场景，因为背后是整篇文章。
+//   2. 按 Esc / 点遮罩 / 点关闭按钮都可关闭；打开时锁滚动。
+//   3. 只动 transform / opacity，不碰布局属性（沿用项目性能铁律）。
+//   4. 尊重 prefers-reduced-motion，并跟随 data-glass 档位降级。
+//
+// 【为什么折射还没开】
+//   feDisplacementMap 会位移元素整体渲染结果（含文字/图片）。这里先只做
+//   「模糊 + 玻璃面板」的底座，确认可用后再评估是否给遮罩边缘加折射。
+---
+
+<!-- 遮罩 + 面板：静态输出，靠 .is-open 切换，避免运行时创建 DOM -->
+<div id="lightbox" class="lightbox" role="dialog" aria-modal="true" aria-label="图片查看" aria-hidden="true">
+  <div class="lightbox__scrim" data-lightbox-close></div>
+  <!-- 面板刻意**不加** .liquid-sheen：
+       面板主体是一张照片，上面再叠跟手高光只会让照片发白、降低可读性；
+       且 .liquid-sheen > * 会给子元素强加 position:relative，
+       与关闭按钮的绝对定位冲突（需 !important 才能压回，属设计冲突而非参数问题）。
+       玻璃感由「半透明白底 + 双向边框 + inset 高光」直接表达即可。 -->
+  <div class="lightbox__panel">
+    <button class="lightbox__close" type="button" aria-label="关闭" data-lightbox-close>✕</button>
+    <img class="lightbox__img" alt="" />
+  </div>
+</div>
+
+<style>
+  .lightbox {
+    position: fixed;
+    inset: 0;
+    /* 层级：导航栏 40 < 灯箱 45 < 噪点层 50。
+       刻意压在噪点层之下 —— 噪点是要盖住整站的胶片质感，
+       灯箱若在它之上，这个区域就"没有噪点"，与全站质感不一致。 */
+    z-index: 45;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 1.5rem;
+    visibility: hidden;
+    pointer-events: none;
+    /* 【关键】这里绝对不能用 opacity 做淡入淡出。
+       祖先元素 opacity < 1 会创建"隔离组"，其子元素的 backdrop-filter
+       将只采样这个空组、看不到页面内容 → 整个过渡期间模糊都不可见，
+       直到 opacity 恰好到达 1、隔离组消失的那一帧才"啪"地跳出（一帧突变）。
+       改用 visibility 离散切换（延迟到淡出结束后再隐藏），
+       淡入淡出交给遮罩自身的 backdrop-filter 与底色完成。
+       延迟取 500ms，须 ≥ 最长的子过渡（面板 transform 480ms），否则收尾被截断。 */
+    transition: visibility 0s linear 500ms;
+  }
+  .lightbox.is-open {
+    visibility: visible;
+    pointer-events: auto;
+    transition: visibility 0s linear 0s;
+  }
+
+  /* 遮罩：模糊背后的整篇文章。这是 backdrop-filter 唯一真正有收益的全屏场景。
+     【淡入方式】模糊值保持恒定，用遮罩**自身**的 opacity 做淡入淡出。
+     为什么不用「过渡模糊半径」这种更花哨的写法：
+       · 元素自身的 opacity 与 backdrop-filter 互不干扰 —— 滤镜先算好，
+         再整体按 alpha 合成，走合成层，必然平滑；
+       · 而过渡 backdrop-filter 本身在部分 Chrome 版本上会闪烁/跳变，
+         等于把"一帧突变"的风险从祖先挪到了自己身上。
+     注意区分：出错的是【祖先】opacity（会形成隔离组、切断背景采样），
+     【元素自身】opacity 是完全安全的 —— 这也是各类 Modal 库的标准做法。 */
+  .lightbox__scrim {
+    position: absolute;
+    inset: 0;
+    background: rgba(11, 19, 34, 0.55);
+    -webkit-backdrop-filter: blur(20px) saturate(140%);
+    backdrop-filter: blur(20px) saturate(140%);
+    opacity: 0;
+    transition: opacity 420ms cubic-bezier(0.16, 1, 0.3, 1);
+  }
+  .lightbox.is-open .lightbox__scrim {
+    opacity: 1;
+  }
+
+  /* 面板：玻璃容器，承载图片 */
+  .lightbox__panel {
+    position: relative;
+    max-width: min(92vw, 1100px);
+    max-height: 88vh;
+    padding: 0.75rem;
+    border-radius: 1.5rem;
+    background-color: rgba(255, 255, 255, 0.08);
+    border: 1px solid rgba(255, 255, 255, 0.18);
+    box-shadow:
+      0 24px 64px rgba(3, 7, 18, 0.6),
+      inset 0 1px 0 rgba(255, 255, 255, 0.22),
+      inset 0 -1px 0 rgba(2, 6, 16, 0.35);
+    /* 入场：位移 + 透明度，符合规范白名单 */
+    transform: scale(0.96) translateY(10px);
+    opacity: 0;
+    transition:
+      transform 480ms cubic-bezier(0.16, 1, 0.3, 1),
+      opacity 420ms cubic-bezier(0.16, 1, 0.3, 1);
+  }
+  .lightbox.is-open .lightbox__panel {
+    transform: scale(1) translateY(0);
+    opacity: 1;
+  }
+
+  .lightbox__img {
+    display: block;
+    max-width: 100%;
+    max-height: 82vh;
+    border-radius: 1rem;
+    object-fit: contain;
+  }
+
+  /* ---- 正文图片的"可点击"提示 ----
+     没有提示用户不知道能点。用 cursor + hover 亮度表达，
+     不额外加装饰元素（避免破坏 .md-body 的排版节奏）。 */
+  :global(.md-body img) {
+    cursor: zoom-in;
+    transition: filter 500ms cubic-bezier(0.16, 1, 0.3, 1);
+  }
+  :global(.md-body img:hover) {
+    filter: brightness(1.08);
+  }
+
+  .lightbox__close {
+    position: absolute;
+    top: -0.9rem;
+    right: -0.9rem;
+    width: 2.25rem;
+    height: 2.25rem;
+    display: grid;
+    place-items: center;
+    border-radius: 9999px;
+    background-color: rgba(255, 255, 255, 0.1);
+    border: 1px solid rgba(255, 255, 255, 0.25);
+    color: #fff;
+    font-size: 0.9rem;
+    line-height: 1;
+    box-shadow:
+      0 4px 16px rgba(3, 7, 18, 0.45),
+      inset 0 1px 0 rgba(255, 255, 255, 0.25);
+    transition: all 500ms cubic-bezier(0.16, 1, 0.3, 1);
+  }
+  .lightbox__close:hover {
+    background-color: rgba(255, 255, 255, 0.12);
+    border-color: rgba(255, 255, 255, 0.35);
+  }
+
+  /* 关闭态下的面板不参与命中测试 */
+  .lightbox:not(.is-open) .lightbox__panel {
+    pointer-events: none;
+  }
+
+  /* ---- 降级 ---- */
+
+  /* lite（省流 / 低内存）：模糊减半。淡入机制不变。 */
+  html[data-glass="lite"] .lightbox__scrim {
+    -webkit-backdrop-filter: blur(10px) saturate(120%);
+    backdrop-filter: blur(10px) saturate(120%);
+  }
+
+  /* static / fallback（不支持模糊）：退化为实底遮罩，仍走自身 opacity 淡入。 */
+  html[data-glass="static"] .lightbox__scrim,
+  html[data-glass="fallback"] .lightbox__scrim {
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+    background: rgba(11, 19, 34, 0.85);
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .lightbox,
+    .lightbox__scrim,
+    .lightbox__panel {
+      transition-duration: 1ms !important;
+    }
+    .lightbox__panel {
+      transform: none;
+    }
+    .lightbox.is-open .lightbox__panel {
+      transform: none;
+    }
+  }
+</style>
+
+<script>
+  // 事件委托 + 全局单例：绑定一次，所有 .md-body img 自动获得灯箱能力。
+  // 新增文章无需改任何代码。
+  (() => {
+    const box = document.getElementById("lightbox");
+    if (!box) return;
+    const img = box.querySelector<HTMLImageElement>(".lightbox__img");
+
+    let lastFocus: HTMLElement | null = null;
+
+    function open(src: string, alt: string) {
+      if (!img) return;
+      img.src = src;
+      img.alt = alt;
+      lastFocus = document.activeElement as HTMLElement | null;
+      box.classList.add("is-open");
+      box.setAttribute("aria-hidden", "false");
+      // 锁滚动：用 overflow 而非 position: fixed，避免页面跳动
+      document.documentElement.style.overflow = "hidden";
+      box.querySelector<HTMLElement>(".lightbox__close")?.focus();
+    }
+
+    function close() {
+      box.classList.remove("is-open");
+      box.setAttribute("aria-hidden", "true");
+      document.documentElement.style.overflow = "";
+      lastFocus?.focus();
+    }
+
+    // 只对正文里的图片生效（.md-body img），不干扰图标等
+    document.addEventListener("click", (e) => {
+      const t = e.target as HTMLElement;
+      if (!(t instanceof HTMLImageElement)) return;
+      if (!t.closest(".md-body")) return;
+      open(t.currentSrc || t.src, t.alt || "");
+    });
+
+    box.addEventListener("click", (e) => {
+      const t = e.target as HTMLElement;
+      if (t.closest("[data-lightbox-close]")) close();
+    });
+
+    document.addEventListener("keydown", (e) => {
+      if (e.key === "Escape" && box.classList.contains("is-open")) close();
+    });
+  })();
+</script>

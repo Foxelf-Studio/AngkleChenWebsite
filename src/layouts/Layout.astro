@@ -1,6 +1,8 @@
 ---
 import "../styles/global.css";
 import { getEntry } from "astro:content";
+import LiquidFilter from "../components/LiquidFilter.astro";
+import Lightbox from "../components/Lightbox.astro";
 
 interface Props {
   title?: string;
@@ -27,9 +29,19 @@ const github = site.github || "";
     <title>{title}</title>
   </head>
   <body class="grain text-white antialiased">
-    <!-- 导航栏 -->
+    <!-- 折射滤镜定义：全站一次，供导航栏 / Modal 以 url(#liquid-refract) 引用 -->
+    <LiquidFilter />
+
+    <!-- 液态跟手层：写入元素级 --mx/--my/--lite -->
+    <script>
+      import "../scripts/liquid.ts";
+    </script>
+
+    <!-- 导航栏
+         折射方案（feDisplacementMap）不适用于本站导航栏，原因记录在下方 CSS 注释中。
+         nav 本体只用 backdrop-filter 表达玻璃，不加任何 filter。 -->
     <nav
-      class="fixed top-0 left-0 right-0 z-40 bg-white/8 backdrop-blur-[40px] backdrop-saturate-[180%] border-b border-white/15 px-6 md:px-8"
+      class="glass-nav liquid-surface fixed top-0 left-0 right-0 z-40 bg-white/8 border-b border-white/15 px-6 md:px-8"
     >
       <div class="flex items-center justify-between max-w-6xl mx-auto gap-6 h-16">
         <a href="/" class="font-semibold text-white text-lg md:text-xl tracking-wide">
@@ -44,7 +56,7 @@ const github = site.github || "";
         <button
           id="menuBtn"
           aria-label="打开菜单"
-          class="md:hidden bg-white/10 backdrop-blur-[40px] backdrop-saturate-[180%] border border-white/20 rounded-2xl text-white px-3 py-1.5 text-sm shadow-[0_4px_16px_rgba(3,7,18,0.45),inset_0_1px_0_rgba(255,255,255,0.25),inset_0_-1px_0_rgba(2,6,16,0.3)] transition-all duration-500 ease-[cubic-bezier(0.16,1,0.3,1)]"
+          class="md:hidden liquid-surface liquid-sheen liquid-sheen--tight bg-white/10 border border-white/20 rounded-2xl text-white px-3 py-1.5 text-sm shadow-[0_4px_16px_rgba(3,7,18,0.45),inset_0_1px_0_rgba(255,255,255,0.25),inset_0_-1px_0_rgba(2,6,16,0.3)] transition-all duration-500 ease-[cubic-bezier(0.16,1,0.3,1)]"
         >
           菜单
         </button>
@@ -102,6 +114,9 @@ const github = site.github || "";
       </div>
     </footer>
 
+    <!-- 图片灯箱：全站单例，点击正文图片放大查看 -->
+    <Lightbox />
+
     <script>
       const menuBtn = document.getElementById("menuBtn");
       const mobileMenu = document.getElementById("mobileMenu");
@@ -112,6 +127,52 @@ const github = site.github || "";
     </script>
 
     <style>
+      /* ============ 导航栏：液态玻璃（L1 光学材质） ============ */
+      /*
+         【为什么导航栏可以用 backdrop-filter 而卡片不行】
+         模糊的收益 = 背后是否有「值得被模糊的内容」。
+           · 导航栏背后 → 正文一直在滚动 → 模糊有真实收益，且它是整屏单例，
+             不存在"相邻卡片互相采样"的场景 → 不会重演亮带 bug。
+           · 卡片背后 → body 的平滑渐变 → 模糊零收益，且模糊核会越界采样
+             相邻卡片的亮边框 → 亮带元凶。所以卡片继续禁用。
+
+         【导航栏不做 feDisplacementMap 折射】结论见下方注释。
+      */
+      .glass-nav {
+        /* 【必须显式声明】Tailwind v4 的工具类在 @layer utilities 层，
+           层叠优先级低于普通 CSS 规则。历史上 .liquid-surface 里写了
+           position: relative 就把这里的 .fixed 顶掉，导致导航栏跟着页面滚走。
+           所以定位一律在组件级 CSS 里显式写死，不依赖工具类。 */
+        position: fixed;
+        -webkit-backdrop-filter: blur(40px) saturate(180%);
+        backdrop-filter: blur(40px) saturate(180%);
+      }
+
+      /* ---- 折射层已移除 ----
+         【为什么不给导航栏做 feDisplacementMap 折射】
+         feDisplacementMap 位移的是「元素自身的渲染结果」，不是它背后的页面。
+         实测下来它在本站导航栏没有任何能成立的落点：
+           · 加在 nav 上  → 位移含文字，字形被推糊、整条 bar 因离屏重采样发灰
+           · 加在独立边缘层 → 该层自身只是渐变，没有背景内容可折射，
+                             位移的只是渐变本身，等于空转；再看就是一条亮带
+         结论：方案 B 不适合本站导航栏。玻璃的"厚度"改由「上亮下暗的双向边框
+         + inset 顶高光 + 外层深阴影」表达（规范 v1.1 的「光有方向」），
+         这也是 glass.ts 既有的做法。滤镜定义保留在 LiquidFilter.astro，
+         留给真正需要的场景（如未来盖在正文上的 Modal）。 */
+
+      /* lite 档：降低模糊，减轻合成负担 */
+      html[data-glass="lite"] .glass-nav {
+        -webkit-backdrop-filter: blur(16px) saturate(140%);
+        backdrop-filter: blur(16px) saturate(140%);
+      }
+
+      /* static / fallback：摘掉模糊，保留材质（半透明白底 + 双向边框） */
+      html[data-glass="static"] .glass-nav,
+      html[data-glass="fallback"] .glass-nav {
+        -webkit-backdrop-filter: none;
+        backdrop-filter: none;
+      }
+
       /* 移动端菜单：做成导航栏的「向下延伸」。
          面板与导航栏用同一套玻璃配方，收起时整体藏在导航栏底边上方（被裁掉），
          展开时整体向下滑出 —— 观感就是「导航栏自己变高、长出菜单」。
