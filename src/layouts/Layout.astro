@@ -243,6 +243,15 @@ const github = site.github || "";
           #000 50px,
           transparent 64px
         );
+        /* 与渐隐高度配套：底边淡出后，"可见玻璃"实际只到 50px，
+           其视觉中心是 25px，而内容仍居中在 32px → logo 看起来偏低。
+           给内容容器补 14px 下内边距（= 渐隐高度），
+           居中后的内容中心回到 25px，与可见玻璃对齐。
+           ⚠️ 改渐隐范围时，这里的数值要同步改（下内边距 = 64 - 渐隐起点）。 */
+        --nav-fade: 14px;
+      }
+      .glass-nav > div {
+        padding-bottom: var(--nav-fade, 14px);
       }
 
       /* ---- 真·折射：backdrop-filter 引用 SVG 滤镜 ----
