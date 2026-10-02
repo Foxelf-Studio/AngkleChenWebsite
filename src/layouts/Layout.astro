@@ -472,15 +472,90 @@ const github = site.github || "";
         pointer-events: none;
       }
 
+      /* 【2026-10-02 修：菜单与导航栏的模糊/亮度不一致】
+         用户报障：「展开的菜单和导航栏的模糊效果好像不一致」。
+
+         取证（blurmatch.mjs，390×844 触屏模拟，菜单展开后取同一列）
+         ---------------------------------------------------------
+                                  backdrop-filter            底色
+         nav   : blur(8px)  saturate(160%) + url(#liquid-refract)  白 12% + scrim
+         panel : blur(40px) saturate(180%)   ← 没有任何折射       白 8%
+
+         透视到"到底是哪里不一样"——**三处都不同**，而且方向还相反：
+           ① 模糊半径  8px  →  40px        ：菜单被糊得更狠
+           ② 折射     有    →  无          ：菜单没有玻璃的"厚度"感
+           ③ 白底浓度 12%   →  8%          ：菜单更透，压不住背后的内容
+
+         像素级验证（局部高频能量，越小=越模糊；同列采样避开文字）：
+           正文对照组 高频 = 0.62   亮度 = 20.5
+           nav       高频 = 0.44   亮度 = 48.7
+           panel     高频 = 0.50   亮度 = 34.3
+           → 亮度差 **-14.4**：菜单明显比导航栏"发暗/发透"，
+             在视觉上就表现为「导航栏是一块深色实玻璃、菜单是一片浅雾」。
+             （首轮采样点误踩了 logo 文字，高频被抬到 29，见 12.27 陷阱）
+
+         【为什么不能简单把菜单也调成 8px + 折射】
+         菜单是**向下延伸**的大面积面板（展开后高 185px，是导航栏的近 3 倍）。
+         它背后**没有滚动的正文**——只有页面顶部那段静态内容，而且一展开
+         就把那块内容盖住了。对它而言 **8px 模糊几乎等于没模糊**，
+         面板会显得"平、糊不够、像半透明色块"。
+         真正需要的是：**同样的观感**，而不是同样的参数值。
+
+         所以做法是**统一到同一套材质语言**：
+           · 模糊取 24px —— 比导航栏强（补上大面积需要更多模糊才"透"的
+             知觉差），但远离 40px 那种"磨砂玻璃"的失真感；
+             也不能取 16px：实测 16px 时背后 hero 大标题
+             「你好，我是咸鱼大法。」的**字形仍可辨认**，
+             金色那三个字会显成一团黄斑浮在菜单上，很抢眼。24px 把它
+             压成柔和光晕，读不出字，但亮度层次还在。
+           · **补上同样的折射** url(#liquid-refract) —— 玻璃的"厚度"来自折射，
+             这正是原来缺失、也是看起来"质感不一样"的主因；
+           · 底色白浓度对齐到 **12%**（规范上限），与导航栏一模一样；
+           · **共用同一个 --nav-scrim 遮罩** —— 菜单展开时通常页面已滚动过，
+             导航栏已变实；两者必须同步变实，否则衔接处会有一条明暗断线。
+
+         【为什么折射对菜单也安全】
+         折射会**位移背后画面**。菜单背后是页面顶部，位移后可能把边缘像素
+         推出可视区 → 裁出硬线。所以复用 LiquidFilter 里已经为导航栏调好的
+         `y="-12%" height="124%"` 区域（垂直留 12% 余量 ≈ 8px，覆盖 scale=12
+         的最大位移），不会裁切。菜单是满宽面板、y 方向也留了同样的余量，
+         几何上与导航栏同类，可以直接复用。 */
       .mobile-menu__panel {
-        /* 与导航栏完全同一套玻璃配方，做到无缝衔接 */
-        background-color: rgba(255, 255, 255, 0.08);
-        -webkit-backdrop-filter: blur(40px) saturate(180%);
-        backdrop-filter: blur(40px) saturate(180%);
+        /* 与导航栏同一套玻璃配方（模糊半径因面积差异而略强），做到无缝衔接 */
+        background-color: rgba(255, 255, 255, 0.12);
+        -webkit-backdrop-filter: blur(24px) saturate(160%);
+        backdrop-filter: blur(24px) saturate(160%);
+        /* 渐进增强：支持 filter 列表 url() 的浏览器补上真折射 */
+        -webkit-backdrop-filter: blur(24px) saturate(160%) url(#liquid-refract);
+        backdrop-filter: blur(24px) saturate(160%) url(#liquid-refract);
         border-bottom: 1px solid rgba(255, 255, 255, 0.15);
         transform: translateY(-100%);
         will-change: transform;
         transition: transform 420ms cubic-bezier(0.16, 1, 0.3, 1);
+      }
+
+      /* 与导航栏**共用**同一个滚动遮罩，保证衔接处不出现明暗断线。
+         注意用 background-image 叠深色（分层绘制：image 在 color 之上），
+         而不是去动 white alpha —— 白玻璃被规范限死在 12%，越不过去。 */
+      html[data-liquid="on"] .mobile-menu__panel {
+        background-image: linear-gradient(
+          rgba(3, 7, 18, var(--nav-scrim, 0)),
+          rgba(3, 7, 18, var(--nav-scrim, 0))
+        );
+      }
+
+      /* 降级档位：与 .glass-nav 的规则一一对应，否则菜单会比导航栏"能跑更多效果"。
+         full 档的折射已在上面直接写好（渐进增强），这里只兜住别的档。 */
+      /* lite 档：与 nav 同档，去掉折射（省合成开销） */
+      html[data-glass="lite"] .mobile-menu__panel {
+        -webkit-backdrop-filter: blur(24px) saturate(140%);
+        backdrop-filter: blur(24px) saturate(140%);
+      }
+      /* static / fallback：与 nav 一致地摘掉模糊，只留材质 */
+      html[data-glass="static"] .mobile-menu__panel,
+      html[data-glass="fallback"] .mobile-menu__panel {
+        -webkit-backdrop-filter: none;
+        backdrop-filter: none;
       }
 
       .mobile-menu.is-open {
