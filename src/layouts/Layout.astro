@@ -150,6 +150,12 @@ const github = site.github || "";
               role="switch"
               aria-label="开启新版视觉效果"
             />
+            <!-- 状态文字：让「开 / 关」不靠滑块位置去猜。
+                 两个词叠放、只交叉淡入淡出（opacity），宽度固定所以切换时不抖动。 -->
+            <span class="liquid-switch__state" aria-hidden="true">
+              <span class="liquid-switch__state-off">已关闭</span>
+              <span class="liquid-switch__state-on">已开启</span>
+            </span>
             <span class="liquid-switch__track" aria-hidden="true">
               <span class="liquid-switch__knob"></span>
             </span>
@@ -285,9 +291,46 @@ const github = site.github || "";
          遵循 glassmorphism 规范：
            · 玻璃半透明底 8%~12%（含 hover/checked 临时态也不超 12%）
            · 双向边框 + inset 顶高光 + 外层深阴影（「光有方向」）
-           · 动效只碰 transform / 边框色 / 背景色，统一 spring 缓动 500ms
-           · 不用颜色单独传递状态 —— 位置位移本身即状态指示
-           · 移动端触控目标 ≥ 44px（由 label 的 min-height 保证） */
+           · 动效只碰 transform / opacity / 背景色，统一 spring 缓动 500ms
+           · 状态由「位移 + 明暗 + 金色光晕」三重线索表达，不靠单一颜色
+           · 移动端触控目标 ≥ 44px（由 label 的 min-height 保证）
+
+         【2026-10-02 优化】用户反馈「开关状态不明显」。
+         原设计里 关=8%白底 / 开=12%白底，在深色底栏上肉眼几乎分不出；
+         唯一的线索是滑块位置与亮度。现在把两态的**明暗差拉大**，
+         并给开启态加一层**金色高光**（光晕环 + 滑块柔光）。
+         金色只以「光」的形式出现（box-shadow / 透明渐变），不做整块铺色，
+         与规范的「唯一强调色只用于高亮」一致。 */
+
+      /* 状态文字：与滑块位置并列的第二重线索，让「开/关」不用猜。
+         两个词绝对定位叠放，宽度固定 → 切换时不会把滑块挤动。 */
+      .liquid-switch__state {
+        position: relative;
+        width: 3.4rem;
+        height: 1rem;
+        margin-right: 0.5rem;
+        font-size: 0.75rem;
+        line-height: 1rem;
+        text-align: right;
+        user-select: none;
+      }
+      .liquid-switch__state > span {
+        position: absolute;
+        inset: 0;
+        text-align: right;
+        /* 只过渡 opacity（合成层），不触发重排重绘 */
+        will-change: opacity;
+        transition: opacity 500ms cubic-bezier(0.16, 1, 0.3, 1);
+      }
+      .liquid-switch__state-off {
+        color: rgba(255, 255, 255, 0.45);
+        opacity: 1;
+      }
+      .liquid-switch__state-on {
+        color: #e4b863;
+        opacity: 0;
+      }
+
       .liquid-switch {
         display: inline-flex;
         align-items: center;
@@ -299,17 +342,39 @@ const github = site.github || "";
         position: relative;
         width: 48px;
         height: 28px;
+        flex-shrink: 0;
         /* 圆角用 1rem（= rounded-2xl）而非「胶囊」专用值，
            在 28px 高上已呈现为胶囊形，符合规范「只允许 2xl / 3xl」 */
         border-radius: 1rem;
-        background-color: rgba(255, 255, 255, 0.08);
-        border: 1px solid rgba(255, 255, 255, 0.15);
+        /* 关闭态：更暗、更「凹」，与开启态的明亮形成明确对比 */
+        background-color: rgba(255, 255, 255, 0.06);
+        border: 1px solid rgba(255, 255, 255, 0.14);
         box-shadow:
           0 4px 16px rgba(3, 7, 18, 0.45),
-          inset 0 1px 0 rgba(255, 255, 255, 0.22),
+          inset 0 1px 0 rgba(255, 255, 255, 0.18),
           inset 0 -1px 0 rgba(2, 6, 16, 0.35);
-        transition: all 500ms cubic-bezier(0.16, 1, 0.3, 1);
+        transition:
+          background-color 500ms cubic-bezier(0.16, 1, 0.3, 1),
+          border-color 500ms cubic-bezier(0.16, 1, 0.3, 1);
       }
+
+      /* 开启态的「高光」：金色光晕环。
+         刻意做成独立图层的 opacity 过渡 —— 而不是去插值 box-shadow
+         （box-shadow 每帧都要重绘，会破坏「动画只碰 transform/opacity」的铁律）。 */
+      .liquid-switch__track::after {
+        content: "";
+        position: absolute;
+        inset: -1px;
+        border-radius: inherit;
+        pointer-events: none;
+        opacity: 0;
+        will-change: opacity;
+        box-shadow:
+          0 0 14px rgba(228, 184, 99, 0.4),
+          inset 0 0 0 1px rgba(228, 184, 99, 0.5);
+        transition: opacity 500ms cubic-bezier(0.16, 1, 0.3, 1);
+      }
+
       .liquid-switch__knob {
         position: absolute;
         top: 50%;
@@ -318,10 +383,12 @@ const github = site.github || "";
         height: 20px;
         margin-top: -10px;
         border-radius: 9999px; /* 圆形滑块，非「圆角」场景 */
-        background-color: rgba(255, 255, 255, 0.5);
+        /* 关闭态：哑光、偏暗，明确读作「未点亮」 */
+        background-color: rgba(255, 255, 255, 0.36);
         box-shadow:
-          0 2px 6px rgba(3, 7, 18, 0.5),
-          inset 0 1px 0 rgba(255, 255, 255, 0.45);
+          0 2px 6px rgba(3, 7, 18, 0.55),
+          inset 0 1px 0 rgba(255, 255, 255, 0.3),
+          inset 0 -1px 0 rgba(2, 6, 16, 0.22);
         transform: translateX(0); /* 只做合成层动画 */
         will-change: transform;
         transition:
@@ -329,21 +396,64 @@ const github = site.github || "";
           background-color 500ms cubic-bezier(0.16, 1, 0.3, 1);
       }
 
+      /* 滑块的暖色柔光：环状渐变，中心保持透明以免把白滑块染黄。
+         同样是 opacity 图层，不参与逐帧绘制。 */
+      .liquid-switch__knob::after {
+        content: "";
+        position: absolute;
+        inset: -4px;
+        border-radius: inherit;
+        pointer-events: none;
+        opacity: 0;
+        will-change: opacity;
+        background: radial-gradient(
+          circle,
+          rgba(228, 184, 99, 0) 38%,
+          rgba(228, 184, 99, 0.55) 68%,
+          rgba(228, 184, 99, 0) 100%
+        );
+        transition: opacity 500ms cubic-bezier(0.16, 1, 0.3, 1);
+      }
+
       /* hover 光效：边框提升 + 亮度提升（外阴影结构保持一致，不加深） */
       .liquid-switch:hover .liquid-switch__track {
         background-color: rgba(255, 255, 255, 0.12);
         border-color: rgba(255, 255, 255, 0.3);
       }
+      .liquid-switch:hover .liquid-switch__knob {
+        background-color: rgba(255, 255, 255, 0.6);
+      }
 
-      /* 开启态：滑块右移 + 提亮。位置变化是非颜色线索，不违反
-         「禁止用颜色单独传递状态」。 */
-      #liquidToggle:checked ~ .liquid-switch__track {
+      /* ---- 开启态：位移 + 提亮 + 金色高光三重线索 ----
+         【为什么用 html[data-liquid="on"] 而不是 #liquidToggle:checked】
+         这个属性由 <head> 的 is:inline 脚本在**首次绘制前**写入；
+         而 input 的 checked 要等模块脚本（defer）执行才被同步 ——
+         若用 :checked 驱动，偏好为「开」的用户每次加载都会先看到一帧
+         「已关闭 + 滑块在左」再跳回去。用 html 属性驱动则首帧即正确。 */
+      html[data-liquid="on"] .liquid-switch__state-off {
+        opacity: 0;
+      }
+      html[data-liquid="on"] .liquid-switch__state-on {
+        opacity: 1;
+      }
+      html[data-liquid="on"] .liquid-switch__track {
         background-color: rgba(255, 255, 255, 0.12);
         border-color: rgba(255, 255, 255, 0.3);
       }
-      #liquidToggle:checked ~ .liquid-switch__track .liquid-switch__knob {
+      html[data-liquid="on"] .liquid-switch__track .liquid-switch__knob {
         transform: translateX(22px); /* 48 - 3 - 20 - 3 = 22 */
-        background-color: rgba(255, 255, 255, 0.95);
+        background-color: rgba(255, 255, 255, 0.98);
+      }
+      /* 高光点亮：金环 + 滑块柔光 */
+      html[data-liquid="on"] .liquid-switch__track::after {
+        opacity: 1;
+      }
+      html[data-liquid="on"] .liquid-switch__knob::after {
+        opacity: 1;
+      }
+      /* 开启态下的 hover 反馈：金环收紧提亮（特异性高于上面的普通 hover 规则） */
+      html[data-liquid="on"] .liquid-switch:hover .liquid-switch__track {
+        border-color: rgba(228, 184, 99, 0.6);
       }
 
       /* 焦点环：仅键盘触发（规范 3.4） */
