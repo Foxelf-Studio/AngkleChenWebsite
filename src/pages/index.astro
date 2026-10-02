@@ -1,7 +1,7 @@
 ---
 import Layout from "../layouts/Layout.astro";
 import { getCollection, getEntry } from "astro:content";
-import { card, cardHover, btn, tagChip, trans, liquidSheen, liquidTarget } from "../lib/glass";
+import { card, cardHover, btn, tagChip, trans } from "../lib/glass";
 
 const posts = (await getCollection("posts")).sort(
   (a, b) => b.data.date.getTime() - a.data.date.getTime()
@@ -42,7 +42,7 @@ function fmt(d: Date) {
             <a
               href={`/post/${post.id}`}
               data-post-id={post.id}
-              class={`block ${card} ${cardHover} ${trans} ${liquidTarget} ${liquidSheen} p-6 md:p-8`}
+              class={`block ${card} ${cardHover} ${trans} p-6 md:p-8`}
             >
               <div class="flex items-center gap-3 text-xs text-white/50 mb-3">
                 <span>{fmt(post.data.date)}</span>
