@@ -14,6 +14,13 @@
 // 【铁律 3】动画只碰 transform / opacity；不要用 height / max-height /
 //   grid-template-rows 等布局属性做过渡（逐帧 reflow，移动端掉帧）。
 //
+// 【铁律 4（2026-10-02 新增）】卡片/按钮的 hover **不做位移**。
+//   原本卡片与按钮都带 `hover:-translate-y-0.5`（上浮 2px）。用户明确要求
+//   「把卡片上移去掉」—— 因为卡片上浮会与「邻卡后退（缩小）」同时出现，
+//   屏幕上是一张往上飘、其余往里缩，两种位移方向打架，空间关系读不出来。
+//   液态玻璃表达「当前操作层」应该用**单一**手段：焦点元素保持不动、
+//   其余元素整体后退。「悬浮」这件事交给高光与阴影，不交给位置。
+//
 // ============================================================
 // 【2026-10-02 重要】液态层直接内建进下面四个常量
 // ============================================================
@@ -28,10 +35,10 @@ export const card =
   "isolate bg-white/8 border border-white/15 rounded-3xl shadow-[0_16px_40px_rgba(3,7,18,0.5),inset_0_1px_0_rgba(255,255,255,0.22),inset_0_-1px_0_rgba(2,6,16,0.35)] [background-image:linear-gradient(to_bottom,rgba(255,255,255,0.12),transparent_50%)] liquid-surface liquid-sheen";
 
 export const cardHover =
-  "hover:bg-white/12 hover:border-white/30 hover:shadow-[0_16px_40px_rgba(3,7,18,0.5),inset_0_1px_0_rgba(255,255,255,0.32),inset_0_-1px_0_rgba(2,6,16,0.3)] hover:-translate-y-0.5 transition-all duration-500 ease-[cubic-bezier(0.16,1,0.3,1)]";
+  "hover:bg-white/12 hover:border-white/30 hover:shadow-[0_16px_40px_rgba(3,7,18,0.5),inset_0_1px_0_rgba(255,255,255,0.32),inset_0_-1px_0_rgba(2,6,16,0.3)] transition-all duration-500 ease-[cubic-bezier(0.16,1,0.3,1)]";
 
 export const btn =
-  "isolate bg-white/10 border border-white/20 rounded-2xl text-white shadow-[0_4px_16px_rgba(3,7,18,0.45),inset_0_1px_0_rgba(255,255,255,0.25),inset_0_-1px_0_rgba(2,6,16,0.3)] hover:bg-white/12 hover:border-white/30 hover:shadow-[0_4px_16px_rgba(3,7,18,0.45),inset_0_1px_0_rgba(255,255,255,0.35),inset_0_-1px_0_rgba(2,6,16,0.3)] hover:-translate-y-0.5 transition-all duration-500 ease-[cubic-bezier(0.16,1,0.3,1)] active:scale-[0.97] liquid-surface liquid-sheen liquid-sheen--tight";
+  "isolate bg-white/10 border border-white/20 rounded-2xl text-white shadow-[0_4px_16px_rgba(3,7,18,0.45),inset_0_1px_0_rgba(255,255,255,0.25),inset_0_-1px_0_rgba(2,6,16,0.3)] hover:bg-white/12 hover:border-white/30 hover:shadow-[0_4px_16px_rgba(3,7,18,0.45),inset_0_1px_0_rgba(255,255,255,0.35),inset_0_-1px_0_rgba(2,6,16,0.3)] transition-all duration-500 ease-[cubic-bezier(0.16,1,0.3,1)] active:scale-[0.97] liquid-surface liquid-sheen liquid-sheen--tight";
 
 export const tagChip =
   "inline-block bg-white/6 border border-white/15 rounded-2xl text-white/85 text-xs px-3 py-1 shadow-[inset_0_1px_0_rgba(255,255,255,0.15),inset_0_-1px_0_rgba(2,6,16,0.3)] hover:bg-white/12 hover:border-white/30 transition-all duration-500 ease-[cubic-bezier(0.16,1,0.3,1)] liquid-surface liquid-sheen liquid-sheen--tight";

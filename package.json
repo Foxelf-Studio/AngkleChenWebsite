@@ -7,6 +7,8 @@
   },
   "scripts": {
     "dev": "tinacms dev -c \"astro dev\"",
+    "dev:lan": "astro dev --host",
+    "dev:tina:lan": "tinacms dev -c \"astro dev --host\"",
     "build": "tinacms build --local --skip-cloud-checks && astro build",
     "preview": "astro preview",
     "astro": "astro"

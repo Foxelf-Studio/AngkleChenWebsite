@@ -247,9 +247,21 @@ body {
   );
 }
 
-/* 【关键】宿主的直接子内容必须浮在高光之上，否则会被高光盖住变糊 */
+/* 【关键】宿主的直接子内容必须浮在高光之上，否则会被高光盖住变糊。
+   —— 但**只给 z-index，绝不给 position**。
+
+   2026-10-02 踩坑：这行原本是 `position: relative; z-index: 2`，
+   后果是「高光触发距离在四个方向上不一致」：
+     .md-body 的直接子元素（p / h2 / ul …）恰好是 card 的**孙代**，
+     规则命中后给每个 <p> 建了新的定位包含块；它们内部的 tagChip
+     （.liquid-surface）就与一个 px 值的视觉包含块发生了偏移 →
+     getBoundingClientRect 与肉眼所见的卡片边界对不上，
+     表现为「上下要贴很近才亮、左右一进即亮 / 或反过来」。
+   .md-body > * 里没有任何绝对定位子元素，.md-body 也没有 overflow: hidden，
+   所以这行 position 是**零收益、全副作用**。
+   z-index 保留即可（它在没有定位时也应生效于 flex/grid 子项与已定位元素）；
+   真要锚点，靠上面 `:where(.liquid-sheen) { position: relative }` 已足够。 */
 .liquid-sheen > * {
-  position: relative;
   z-index: 2;
 }
 
@@ -321,19 +333,111 @@ html[data-liquid="on"]:not([data-modal="open"]) .page-shell {
    对应 Liquid Glass 四层结构里最上面的「当前操作」层。
    只做**降权**（非悬停的兄弟元素后退），不改变悬停元素自身 ——
    层级关系由「谁被突出」表达，而不是给焦点元素加更多特效。
-   ⚠️ 与「外阴影结构必须一致」那条铁律的出发点不同：
-     那条防的是「用压暗邻域背景制造变白错觉」；这里是主动、对称地把
-     非焦点元素降权，方向相反（变暗而非变白），实现后仍需实测边缘。 */
+
+   【2026-10-02 重做，三条都改】
+   原实现是 `main .grid:hover > *:not(:hover)`，三个问题：
+     ① **触发条件错**：只判 grid 自己被不被 hover。指针落在卡片**之间**的
+        gap、或 grid 的任何空白区域时，grid 依然 :hover，但 `:not(:hover)`
+        把所有卡片都选中了 → 整块区域全变暗（用户实测截图确认）。
+     ② **覆盖范围窄**：只作用于 .grid 的**直接子元素**，非 grid 布局的卡片
+        （/about、文章页等）完全没接上。
+     ③ 只做「变暗」，没有「缩小」，且时长曲线偏快，观感像硬切。
+
+   【为什么不用 :hover 做触发，而用 JS 写的 data-focus】
+     :hover 的命中判定是"指针坐标落在元素 border-box 内"，**不含**
+     任何容差。用户要的是"指针贴到卡片边缘 6px 内就算进入"，
+     这个容差必须自己算 —— CSS 无法表达"外扩 6px"。
+     所以由 liquid.ts 用像素容差判定，写 html[data-focus="inside"]。
+
+   【为什么后退的是"全部"而不是"仅同组兄弟"】
+     曾考虑把范围收窄到"当前卡所在的那个容器/网格里的兄弟"，
+     但液液态玻璃的语义是**当前操作层的层级关系**：整个内容层里，
+     被指向的那一块浮在焦点上，其余一律退到后面。
+     收窄到同组反而会在跨组时出现"该退的没退"。
+     用户此前的抱怨是"在 gap 里也全暗"（触发错了），
+     不是"在卡片上也全暗"（那是预期行为）。 */
+
+/* 后退配方：缩小 + 变暗 + 去饱和，三者同时、同曲线、700ms。
+   为什么是 700ms：用户反馈"变暗和恢复太快，像突然变化"。
+   实测 500ms 配 cubic-bezier(0.16,1,0.3,1) 时，前 30% 就走完 80% 的路程，
+   肉眼读作硬切。700ms 把整段摊开，缓出的尾巴更长，观感才是"退下去"。 */
+html[data-liquid="on"][data-focus="inside"] .liquid-surface:not(:hover) {
+  /* 特异性 (0,3,1)/(0,3,0)：高于所有 Tailwind hover: 工具类（(0,2,0)），
+     保证邻卡不会"一边后退一边又按 hover 样式放大回来"。 */
+  transform: scale(0.955);
+  opacity: 0.45;
+  filter: saturate(0.5);
+  /* 只动 transform / opacity / filter，不碰布局属性 */
+  transition:
+    transform 700ms cubic-bezier(0.16, 1, 0.3, 1),
+    opacity 700ms cubic-bezier(0.16, 1, 0.3, 1),
+    filter 700ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+/* ---- 豁免：不参与「非焦点后退」的元素 ----
+   导航栏 / 开关轨道是整屏单例的「环境材质」，不是「当前操作层」里的选项，
+   参与共同后退在语义上就不对（导航栏没有"相邻"概念），
+   而且它一旦 scale(0.955)，整条吸顶栏会向内缩、边缘露出底色。
+
+   【特异性必须对得上，否则豁免无效】
+   上面那条退避规则的实际特异性是：
+     html[data-liquid][data-focus]  → (0,2,0)
+     .liquid-surface                → (0,1,0)
+     :not(:hover)                   → (0,1,0)   ← :not() 取括号内选择器的权重
+     合计 (0,4,0)
+   所以这里的兜底规则**也必须凑到 (0,4,0)** 才能靠"更靠后"取胜。
+   只写 `.glass-nav`（(0,3,0)）是**压不过**的 —— 实测确认导航栏被缩到 0.955、
+   宽度从 1265 掉到 1208，即本条豁免完全失效。
+   做法：给兜底也加上 `:not(:hover)`，凑成同样的 (0,4,0)。
+   （用 .glass-nav 的 :not 变体而不是直接写 !important ——
+     后者会破坏其他状态覆盖链。） */
+html[data-liquid="on"][data-focus="inside"] .glass-nav:not(:hover),
+html[data-liquid="on"][data-focus="inside"] .glass-nav:hover,
+html[data-liquid="on"][data-focus="inside"] .liquid-switch__track:not(:hover) {
+  transform: none;
+  opacity: 1;
+  filter: none;
+}
+
+/* 还原态：退出后回到原位。这条同时**覆盖掉 cardHover 自带的
+   `hover:-translate-y-0.5`** —— 这也是用户反馈「卡片上移没去掉」的根治：
+   与其去改 cardHover（那是全站卡片的既有 hover 语言），不如在这里
+   统一改写 transform。注意必须同时列出 :not(:hover)，
+   否则指针在 gap 时，未 hover 的卡会走 @layer utilities 的默认
+   transform 值（none），也是对的 —— 所以这条只用来兜住"从后退态回位"。 */
 @media (hover: hover) and (pointer: fine) {
-  main .grid > * {
+  html[data-liquid="on"] .liquid-surface {
     transition:
-      opacity 500ms cubic-bezier(0.16, 1, 0.3, 1),
-      filter 500ms cubic-bezier(0.16, 1, 0.3, 1);
+      transform 700ms cubic-bezier(0.16, 1, 0.3, 1),
+      opacity 700ms cubic-bezier(0.16, 1, 0.3, 1),
+      filter 700ms cubic-bezier(0.16, 1, 0.3, 1),
+      background-color 700ms cubic-bezier(0.16, 1, 0.3, 1),
+      border-color 700ms cubic-bezier(0.16, 1, 0.3, 1);
   }
-  html[data-liquid="on"] main .grid:hover > *:not(:hover) {
-    opacity: 0.42;
-    filter: saturate(0.55);
-  }
+}
+
+/* ============ 触屏：让高光与滚动共存 ============
+   2026-10-02 用户反馈：手指按住卡片有高光，但一移动就消失、页面也不跟手。
+
+   根因不是"没监听 move"，而是**手势所有权**：
+     指针落在可滚动区域时，浏览器要决定这次触摸算「页面滚动」还是「元素交互」。
+     默认（touch-action: auto）它会判给滚动 —— 一旦认定，就发 pointercancel
+     收回控制权。liquid.ts 收到 pointercancel 后把 pressed 置 false，
+     于是高光熄灭，且后续 pointermove 不再产生任何视觉变化。
+
+   解法不是抢滚动（那会让页面拖不动），而是**划清界限**：
+     touch-action: pan-y pinch-zoom
+       · 垂直方向（pan-y）→ 仍归浏览器 → 单指上下滑 = 正常滚页面
+       · 双指缩放（pinch-zoom）→ 仍归浏览器 → 无障碍不被破坏
+       · 其余（横向拖动）→ 交给页面 → 不再触发 pointercancel，
+                                     pointermove 持续送达，高光可跟随
+   这正是"高光跟着动、同时页面也正常动"的实现方式：
+   两个手势互不争抢，各管一个轴。
+
+   范围限定在 html[data-input="touch"] —— 由 liquid.ts 运行期探测写入。
+   绝不给鼠标设备加这条：桌面端横向拖动文字选中、划选等行为会被改变。 */
+html[data-input="touch"] .liquid-surface {
+  touch-action: pan-y pinch-zoom;
 }
 
 /* ============ 动效 ============ */
