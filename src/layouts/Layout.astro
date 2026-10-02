@@ -29,14 +29,23 @@ const github = site.github || "";
     <title>{title}</title>
     <!-- 视觉开关的偏好必须在**首次绘制前**写入 html 属性，否则会先按默认渲染
          再被 JS 纠正，出现一次可见的闪烁（FOUC）。
-         故意用 is:inline —— 不能是模块脚本，模块是 defer 的，执行太晚。 -->
+         故意用 is:inline —— 不能是模块脚本，模块是 defer 的，执行太晚。
+         另支持 ?liquid=on|off 诊断参数（与 ?glass= 同规格），便于并排比对两种视觉。 -->
     <script is:inline>
-      try {
-        var saved = localStorage.getItem("liquidGlass");
-        document.documentElement.dataset.liquid = saved === "off" ? "off" : "on";
-      } catch (e) {
-        document.documentElement.dataset.liquid = "on";
-      }
+      (function () {
+        var forced = new URLSearchParams(location.search).get("liquid");
+        if (forced === "on" || forced === "off") {
+          document.documentElement.dataset.liquid = forced;
+          document.documentElement.dataset.liquidForced = "1";
+          return;
+        }
+        try {
+          var saved = localStorage.getItem("liquidGlass");
+          document.documentElement.dataset.liquid = saved === "off" ? "off" : "on";
+        } catch (e) {
+          document.documentElement.dataset.liquid = "on";
+        }
+      })();
     </script>
   </head>
   <body class="grain text-white antialiased">
@@ -52,7 +61,7 @@ const github = site.github || "";
          折射方案（feDisplacementMap）不适用于本站导航栏，原因记录在下方 CSS 注释中。
          nav 本体只用 backdrop-filter 表达玻璃，不加任何 filter。 -->
     <nav
-      class="glass-nav liquid-surface fixed top-0 left-0 right-0 z-40 bg-white/8 border-b border-white/15 px-6 md:px-8"
+      class="glass-nav liquid-surface liquid-sheen liquid-sheen--wide fixed top-0 left-0 right-0 z-40 px-6 md:px-8"
     >
       <div class="flex items-center justify-between max-w-6xl mx-auto gap-6 h-16">
         <a href="/" class="font-semibold text-white text-lg md:text-xl tracking-wide">
@@ -94,7 +103,7 @@ const github = site.github || "";
 
     <!-- 页脚 -->
     <footer
-      class="bg-white/8 backdrop-blur-[60px] backdrop-saturate-[180%] border-t border-white/15 text-white/80 py-16 md:py-24 px-6 md:px-8 mt-8"
+      class="glass-footer text-white/80 py-16 md:py-24 px-6 md:px-8 mt-8"
     >
       <div class="max-w-6xl mx-auto">
         <div class="grid grid-cols-1 md:grid-cols-3 gap-8">
@@ -201,8 +210,18 @@ const github = site.github || "";
            position: relative 就把这里的 .fixed 顶掉，导致导航栏跟着页面滚走。
            所以定位一律在组件级 CSS 里显式写死，不依赖工具类。 */
         position: fixed;
+        /* 玻璃底提到规范上限 12%，让"透光"看得见 */
+        background-color: rgba(255, 255, 255, 0.12);
         -webkit-backdrop-filter: blur(40px) saturate(180%);
         backdrop-filter: blur(40px) saturate(180%);
+        border-bottom: 1px solid rgba(255, 255, 255, 0.15);
+        /* 规范 3.1 的「光有方向」三件套：
+           外层深阴影（把导航栏从页面上"抬起来"）
+           + inset 顶部受光 + inset 底部背光 —— 玻璃因此有了厚度 */
+        box-shadow:
+          0 8px 32px rgba(3, 7, 18, 0.45),
+          inset 0 1px 0 rgba(255, 255, 255, 0.2),
+          inset 0 -1px 0 rgba(2, 6, 16, 0.35);
       }
 
       /* ---- 折射层已移除 ----
@@ -304,6 +323,37 @@ const github = site.github || "";
           inset 0 1px 0 rgba(255, 255, 255, 0.22),
           inset 0 -1px 0 rgba(2, 6, 16, 0.35);
       }
+
+      /* ---- 底栏：柔化顶边 ----
+         原设计是 `bg-white/8 ... border-t border-white/15`，在整屏宽上会产生
+         一道硬边：1px 亮线（实测亮度 88，而上下只有 43/59）+ 8% 白带来的
+         +16 亮度台阶。在页脚这种满宽面板上，这道硬边看起来就是"一条亮带"。
+
+         柔化做法（保留「光有方向」，但取消硬边）：
+           1. 底色改为**纵向渐变**：从接近 0 平滑爬到 8%（160px 内完成），
+              这样元素边界处没有突变，台阶被摊开成过渡。
+           2. 顶边受光改用**两端渐隐**的细高光，而非满宽实线。 */
+      .glass-footer {
+        position: relative;
+        background-color: transparent;
+        background-image: linear-gradient(
+          to bottom,
+          rgba(255, 255, 255, 0) 0px,
+          rgba(255, 255, 255, 0.08) 180px,
+          rgba(255, 255, 255, 0.08) 100%
+        );
+        /* 【刻意不加 backdrop-filter】
+           理由与本项目已确立的规则 5 完全一致（见 glass.ts / 规范 v1.1）：
+           footer 背后只有 body 的平滑渐变，模糊**零收益**；
+           而 backdrop-saturate(180%) 会在元素边界造成颜色台阶，
+           反而在页脚顶部切出一道可见的界线。
+           只有「背后会滚过正文的导航栏」「盖在正文上的浮层」才需要它。 */
+      }
+      /* 顶边不再单独画受光高光。
+         原因：任何"只在 footer 内部变亮"的处理都会在边界造出
+         「上亮下暗、且比上方也亮」的一条带 —— 那正是要消除的东西。
+         实测数据：加 20px 渐隐光晕后，顶边仍有 17 级亮度突跳（43→62）。
+         改为让背景**从 0 起步**，边界处与上方无缝，再缓慢爬到 8%。 */
 
       /* 移动端菜单：做成导航栏的「向下延伸」。
          面板与导航栏用同一套玻璃配方，收起时整体藏在导航栏底边上方（被裁掉），

@@ -216,14 +216,25 @@ body {
   opacity: calc(var(--lite) * var(--sheen-t));
   /* screen 混合：高光只做加光，不改变底色本身，玻璃才保持"无色" */
   mix-blend-mode: screen;
+  /* 高光斑：加大半径与强度，让"液态感"在正常观看距离下就能被感知 */
   background-image: radial-gradient(
-    240px circle at var(--mx) var(--my),
-    rgba(255, 255, 255, 0.14),
-    rgba(255, 255, 255, 0.05) 40%,
-    transparent 72%
+    340px circle at var(--mx) var(--my),
+    rgba(255, 255, 255, 0.22),
+    rgba(255, 255, 255, 0.08) 42%,
+    transparent 74%
   );
   /* 只过渡 opacity，位置变化由 JS 每帧写入，不参与 CSS 过渡 */
   transition: opacity 500ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+/* 宽扁容器（导航栏等）：半径要跟着放大，否则高光只占一小块 */
+.liquid-sheen--wide::after {
+  background-image: radial-gradient(
+    620px circle at var(--mx) var(--my),
+    rgba(255, 255, 255, 0.16),
+    rgba(255, 255, 255, 0.05) 45%,
+    transparent 76%
+  );
 }
 
 /* 紧凑版：小控件（按钮 / chips）用更小半径，避免整块被点亮 */
@@ -270,15 +281,18 @@ html[data-glass="lite"] .liquid-surface {
 html[data-liquid="off"] .liquid-sheen::after {
   opacity: 0;
 }
-/* 关掉时不需要高光的定位锚点 */
-html[data-liquid="off"] .liquid-sheen {
-  position: static;
-}
-/* 注意：这里**不能**顺手写 isolation: auto。
+/* 【这里刻意不再重置 position】
+   曾写过 `html[data-liquid="off"] .liquid-sheen { position: static }`，
+   想"还原成原样"。但那条选择器特异性是 (0,2,1)，高于 `.glass-nav` 的 (0,1,0) ——
+   而导航栏现在也是 .liquid-sheen，于是**关掉开关时导航栏会被变成 static、失去吸顶**
+   （实测文档高度 1788 → 1853，正好多出导航栏的 65px）。
+   实际上完全不需要重置：高光已由上面那条 opacity: 0 彻底隐藏，
+   元素保留 position: relative 无任何副作用。
+   教训：写「关闭态/重置」规则前，先确认这条规则的特异性不会压过别处更重要的声明。 */
+/* 注意：也**不能**顺手写 isolation: auto。
    glass.ts 的 card 常量本身就带 isolate（原有玻璃拟态设计的一部分），
    而本条选择器特异性高于 @layer utilities 里的 .isolate，
-   写 auto 会把原有的 isolate 一起干掉 → 破坏原有渲染。
-   .liquid-surface 上重复声明的 isolation: isolate 与 card 的 isolate 同值，无需清理。 */
+   写 auto 会把原有的 isolate 一起干掉 → 破坏原有渲染。 */
 
 /* ============ 动效 ============ */
 .fade-in {
