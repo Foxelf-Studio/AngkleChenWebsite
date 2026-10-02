@@ -1030,4 +1030,146 @@ window.addEventListener("touchcancel", endTouch, { passive: true });
   **`astro check` 要跑**（注意需 `--max-old-space-size=6144`，
   `public/admin` 里 TinaCMS 打包的巨型 JS 会 OOM）。
 
+### 12.25 【铁律】触屏坐标必须走 `touchmove` —— 滚动接管后 `pointermove` 会**断流**
+
+第三轮用户报障：「移动端滑动时光效是有了，也不会消失，但是光效只会
+停留在我手指一开始触摸的位置，并没有跟随手指移动」。
+
+**这条是 12.23 的"后半句"**。12.23 修好了「不熄灭」，但漏了「跟手」——
+两者在 `pointermove` 这一路上是**互斥**的：
+
+- 12.23 之前：`pointercancel` 一响就熄灭 → 问题是"闪一下就没"；
+- 12.23 之后：容忍 cancel，高光保持点亮 → 但坐标**再也没更新过**。
+
+**根因**：浏览器一旦把这次触摸判给**滚动**，就**停止派发 `pointermove`**。
+于是 `clientX/clientY` 永远停在按下那一帧 → 光钉在落点不动。
+"拿不到新坐标，就不可能跟手"——这不是渲染问题，是**数据源问题**。
+
+**实测证据**（`followtest.mjs`，390×844 触屏模拟，向上滑 12 步）：
+
+```
+pointermove 事件数 = 1   clientY 序列: 285, -, -, ...        ← 只有按下那一下
+touchmove   事件数 = 9   clientY 序列: 285,267,231,213,177,159,123,105,87
+```
+
+`touchmove` 在滚动**全程持续派发**，且坐标完整连续。
+**结论：触屏坐标只认 `touchmove`。**
+
+**正解**：
+```ts
+// 1) pointermove 内部对触屏直接 return，避免与 touchmove 抢写同一坐标
+const onPointerMove = (e: PointerEvent) => {
+  if (e.pointerType === "touch" && !pressed) return;
+  if (e.pointerType === "touch") return;   // ← 触屏坐标一律走 touchmove
+  clientX = e.clientX;
+  clientY = e.clientY;
+  wake();
+};
+
+// 2) 新增 touchmove 作为坐标主源
+const onTouchMove = (e: TouchEvent) => {
+  if (!pressed) return;
+  const t = e.touches[0];
+  if (!t) return;
+  clientX = t.clientX;
+  clientY = t.clientY;
+  wake();
+};
+window.addEventListener("touchmove", onTouchMove, { passive: true });
+```
+
+**为什么 `touchmove` 不会拖累滚动**：用 `{ passive: true }` 注册 ——
+等于向浏览器声明「我不会 `preventDefault()`」，滚动**不必等我们处理完**。
+这是**读**坐标（observer），不是**接管**手势（controller）。
+`setPointerCapture` 之所以错，正在于它是后者（见 12.23）。
+
+**验证**（`followverify.mjs`，由元素 rect + 百分比反算光的屏幕坐标）：
+
+```
+步  手指(clientY)  光屏幕Y   rectTop  手指-光差  scrollY   --my
+ 0        303       264       243        -39        0    7.6
+ 4        239       243       194          4       49   17.8
+ 8        175       177       130          2      113   17.3
+10        143       148        98          5      145   18.4
+
+手指屏幕位移 -160px / 光的屏幕位移 -116px / 页面滚动量 145px
+最大偏差 9px   光是否跟手: ✅ 是   页面是否滚动: ✅ 是
+```
+
+**注意 `--my` 稳定在 17–20% 而不是单调走到底，是正确行为**：
+手指每步上移 16px、页面同时滚 16px，手指相对卡片的百分比自然保持稳定，
+而屏幕上光则跟着手指走 —— 这正是「两个同时成立」的物理表现。
+排查时若误以为「`--my` 必须持续变化才算跟手」会跑偏。
+
+### 12.26 【铁律】背景层禁用 `background-attachment: fixed` 与**百分比定位**的渐变
+
+第三轮用户报障：手机 Edge 滑动时底栏自动收缩，**收缩处出现一条色差带**；
+松手时若底栏收缩成功则色差更正，若收缩失败会回弹、恰好盖住色差区域。
+
+**第一层根因：`background-attachment: fixed`**
+语义是「背景相对**视口**固定」→ 视口尺寸一变，整片背景就按新视口重铺。
+移除它（改用独立的 `.bg-fixed` 层承载）。
+
+**但移除后问题依旧**（实测色差仍有 **18**）—— 说明还有第二层。
+**真正的元凶：百分比定位的 `radial-gradient` 圆心。**
+
+背景层高度恒等于视口高（844 → 800 → 760），而圆心写的是
+`85% 10%` / `10% 90%` / `50% 55%`。**百分比是相对元素自身盒子解析的**，
+盒子高度一变 → 三个光斑圆心全部跟着移动 → 全屏背景亮度整体漂移 →
+与「已经画好的页面内容」错位 → 底边露出色差带。
+
+**实测证据**（`viewporttest.mjs`，同一滚动位置 y=500，仅改视口高度，
+采样左侧纯背景列 x=60）：
+
+```
+视口 844 → rgb(40,48,64)
+视口 820 → rgb(38,46,62)   差 6
+视口 790 → rgb(37,46,61)   差 8
+视口 760 → rgb(33,44,60)   差 15
+.bg-fixed 实测高度: 844 / 800 / 760   ← 与视口同变
+```
+
+**修法：把"会随视口变"的百分比换成"不动的绝对长度"**
+```css
+.bg-fixed {
+  position: fixed; top: 0; left: 0; right: 0;
+  height: 1400px;          /* 定值 px —— 绝不用 vh */
+  z-index: -1; pointer-events: none;
+  background-color: #0b1322;
+  background-image:
+    /* 宽度方向用 vw（底栏收缩只改高度、不改宽度） */
+    radial-gradient(640px circle at 85vw 140px,  rgba(124,156,196,0.25), transparent 60%),
+    radial-gradient(560px circle at 10vw 1260px, rgba(51,81,122,0.3),   transparent 60%),
+    radial-gradient(480px circle at 50vw 770px,  rgba(228,184,99,0.08),  transparent 60%);
+  /* 高度方向一律 px 定值 */
+}
+html, body { background-color: #0b1322; }   /* 兜底 */
+```
+
+**安全性分析（关键）**：
+- `vw` 是**安全**的 —— 底栏收缩只改高度，不改宽度；
+- `vh` 是**最危险**的 —— 它正是随底栏变化的那个量，一律禁用；
+- 背景层高度必须用 `px` 定值（`min-height: 100%` / `100vh` 都会跟视口变）；
+- `body` 也同步去掉 `min-height: 100vh`（移动端 `vh` 普遍包含被工具栏
+  遮挡的区域），改 `min-height: 100%`，并在 `html` 上补 `height: 100%`
+  建立高度链。
+
+**验证**：最大色差 **26 → 2**，`✅ 背景不随视口高度变化`。
+
+### 12.27 【排查陷阱】采样点不得依赖视口高，否则视口一变就测到不同内容
+
+本轮定位色差带时，第一版脚本用「**截图高度的 70%**」作为采样点。
+换视口高度后，这个点落到了**页面的不同位置**，读出「色差 18」的
+**假阳性**，把排查带偏了一轮。
+
+**这是同类测量陷阱第二次踩**（上一次是「从元素中心往外量」，
+元素本身在动，量出来的"距离"没有可比性）。
+
+**铁律**：
+- 采样点必须用**固定页坐标**（或固定元素相对坐标），
+  绝不用「视口百分比」「截图百分比」；
+- 对比不同视口时**不要滚动页面** —— 滚动会改变可滚动范围，
+  把「背景漂移」与「内容移位」两个变量混淆在一起；
+- 先问一句：「我这几个数据点，量的是同一个东西吗？」
+
 ## 附：修复记录（续）

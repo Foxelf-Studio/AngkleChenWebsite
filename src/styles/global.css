@@ -3,19 +3,91 @@
 /* ============ Glassmorphism 全局基底 ============ */
 html {
   scroll-behavior: smooth;
+  /* 高度链：让 body 的 min-height: 100% 能有参照。
+     与 100vh 的区别：百分比高度不吃"移动端底栏收缩"带来的
+     视口波动，不会在滚动时跳变。 */
+  height: 100%;
 }
 
+/* ------------------------------------------------------------
+   【2026-10-02 修：移动端底栏收缩处的"色差带"】
+   ------------------------------------------------------------
+   现象（用户录屏实测）：手机 Edge 滑动时底栏自动收缩，收缩边缘
+   出现一条横向色差带；底栏回弹后恰好盖住它。
+
+   【第一层根因：`background-attachment: fixed`】
+   body 原本用该属性让背景"不随滚动走"。语义是「背景相对**视口**
+   固定」—— 视口尺寸一变，整片背景渐变就按新视口尺寸重铺。
+   已移除（改由下面的 .bg-fixed 承担）。
+
+   【第二层根因 —— 真正的元凶：百分比定位的渐变】
+   移除 attachment 后**问题依旧**（实测色差仍有 18）。深挖发现：
+     .bg-fixed 的 height 恒等于视口高（844 → 800 → 760），
+     而三个 radial-gradient 的圆心写的是**百分比**（85% 10% 等）。
+   百分比定位是相对**元素自身盒子**解析的 —— 盒子高度一变，
+   三个光斑圆心全部跟着移动 → 全屏背景亮度整体漂移 →
+   与"已经画好的页面内容"错位 → 底边露出色差带。
+
+   【实测证据】（viewporttest.mjs，同一滚动位置 y=500，
+   仅改视口高度，采样左侧纯背景列 x=60）：
+     视口 844 → rgb(40,48,64)
+     视口 820 → rgb(38,46,62)   差 6
+     视口 790 → rgb(37,46,61)   差 8
+     视口 760 → rgb(33,44,60)   差 15
+   且 .bg-fixed 的高实测为 844 / 800 / 760 —— 与视口同变。
+
+   【修法：把"会随视口变"的百分比换成"不动的绝对长度"】
+   ① 背景层的几何不再跟视口走：用一个大到任何设备都覆盖住的
+      固定尺寸（min-height: 100% 会跟视口变，所以改用
+      height: 100vh 之外的方案 —— 直接用 inset:0 + min-height
+      仍是视口高；因此这里改成**绝对定位锚定到文档顶部**，
+      高度取一个足够大的定值，配合 cover 语义）。
+   ② 渐变圆心由百分比改为**绝对长度（px/vw）**：
+      宽度方向用 vw（视口宽在移动端底栏收缩时**不变**），
+      高度方向用 px（定值，绝不随视口高变化）。
+   这样视口高度怎么变，背景都一张不动 —— 色差带从物理上消失。
+
+   注意：vw 是安全的（底栏收缩只改高度，不改宽度）；
+   而 vh 恰恰是**最危险**的 —— 它正是随底栏变化的那个量。
+   ------------------------------------------------------------ */
 body {
   background-color: #0b1322;
-  background-image:
-    radial-gradient(640px circle at 85% 10%, rgba(124, 156, 196, 0.25), transparent 60%),
-    radial-gradient(560px circle at 10% 90%, rgba(51, 81, 122, 0.3), transparent 60%),
-    radial-gradient(480px circle at 50% 55%, rgba(228, 184, 99, 0.08), transparent 60%);
-  background-attachment: fixed;
   font-family: "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", "Source Han Sans SC", sans-serif;
-  min-height: 100vh;
+  /* 【2026-10-02】不用 min-height: 100vh ——
+     `vh` 在移动端会随底栏收缩而变（正是色差带的诱因之一），
+     且 100vh 在 iOS/Android 上普遍包含被工具栏遮挡的区域。
+     用 min-height: 100% + html 高度链更稳。 */
+  min-height: 100%;
   color: #fff;
   -webkit-font-smoothing: antialiased;
+  position: relative;
+}
+
+/* 背景层：绝对定位锚定文档顶部，尺寸用 px 定值，
+   圆心用 vw/px（不含任何 vh / 百分比）—— 视口高度变化时纹丝不动。 */
+.bg-fixed {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  /* 定值高度：覆盖任何常见手机视口（含地址栏展开的最大态）。
+     用 px 而非 vh —— vh 会随底栏收缩变化，正是要避免的量。 */
+  height: 1400px;
+  z-index: -1;
+  pointer-events: none;
+  background-color: #0b1322;
+  background-image:
+    /* 右上冷光：x 用 vw（底栏收缩不改宽），y 用 px 定值 */
+    radial-gradient(640px circle at 85vw 140px, rgba(124, 156, 196, 0.25), transparent 60%),
+    /* 左下深蓝：y 锚到层底部附近的定值 */
+    radial-gradient(560px circle at 10vw 1260px, rgba(51, 81, 122, 0.3), transparent 60%),
+    /* 中央金字微光 */
+    radial-gradient(480px circle at 50vw 770px, rgba(228, 184, 99, 0.08), transparent 60%);
+}
+
+/* 无 JS / 老浏览器兜底：至少保证深色底 */
+html, body {
+  background-color: #0b1322;
 }
 
 /* 噪点颗粒层（SVG feTurbulence，约 2.5%） */

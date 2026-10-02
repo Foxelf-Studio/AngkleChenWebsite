@@ -328,8 +328,50 @@ if (tier === "full" || tier === "lite") {
   const onPointerMove = (e: PointerEvent) => {
     // 已被取消/不可用的指针（例如另一根手指接管）不参与，避免坐标乱跳
     if (e.pointerType === "touch" && !pressed) return;
+    // 触屏上 pointermove 一旦被浏览器判给滚动就不再派发，
+    // 坐标会永久停在按下位置 —— 所以触屏坐标一律走 touchmove
+    // （见下方 onTouchMove）。这里只负责鼠标/笔。
+    if (e.pointerType === "touch") return;
     clientX = e.clientX;
     clientY = e.clientY;
+    wake();
+  };
+
+  // ------------------------------------------------------------
+  // 触屏坐标源：touchmove
+  // ------------------------------------------------------------
+  // 【2026-10-02 第三轮修：光效"钉在按下位置"，不跟手】
+  //
+  // 现象（用户实测）：按住有光、也不熄灭，但光停在一开始的落点，
+  //   手指移动时它不跟着走。
+  //
+  // 【根因：滚动接管后 pointermove 断流】
+  //   上一轮为了让"滚动时高光不熄灭"，把 pointercancel 改成了容忍。
+  //   但容忍只保住了「不熄灭」，没保住「跟手」——
+  //   浏览器一旦把触摸判给滚动，就**停止派发 pointermove**，
+  //   于是 clientX/clientY 永远是按下那一帧的值，光自然不动。
+  //   也就是说：滚动期间「不熄灭」与「跟手」在 pointermove 这一路是
+  //   互斥的 —— 拿不到新坐标，就不可能跟手。
+  //
+  // 【实测证据】（followtest.mjs，向上滑动 12 步）：
+  //     pointermove 事件数 = 1   clientY 序列: 285               ← 只有按下那一下
+  //     touchmove   事件数 = 9   clientY 序列: 285,267,231,...   ← 完整连续
+  //   touchmove 在滚动全程持续派发且带着完整坐标。
+  //
+  // 【为什么 touchmove 不会拖累滚动】
+  //   监听器用 { passive: true } —— 向浏览器声明"我不会
+  //   preventDefault()"，因此滚动**不会**等我们处理完才走，
+  //   不引入任何滚动延迟。这与"用 preventDefault 抢滚动"是两件事：
+  //   我们只是**读**坐标（observer），不是**接管**手势（controller）。
+  //
+  // 结果：页面照常由浏览器原生滚动（惯性/回弹都正常），
+  //       同时高光跟随手指 —— 正是用户要的"两个同时成立"。
+  const onTouchMove = (e: TouchEvent) => {
+    if (!pressed) return;
+    const t = e.touches[0];
+    if (!t) return;
+    clientX = t.clientX;
+    clientY = t.clientY;
     wake();
   };
 
@@ -440,9 +482,9 @@ if (tier === "full" || tier === "lite") {
       clientY = e.clientY;
       // 【刻意不做 setPointerCapture】
       //   捕获虽能保证 pointermove 持续送达，但会把这次触摸从"滚动手势"里
-      //   摘出来 → 页面滚不动。用户要的是"高光跟着动、同时页面也正常动"，
-      //   所以滚动优先，高光靠 CSS 的 touch-action 分轴 + 下面的
-      //   pointermove 兜底来维持。
+      //   摘出来 → 页面滚不动。用户要的是"高光跟着动、同时页面也正常动"。
+      //   正解不是捕获，而是**换坐标源**：滚动期间 pointermove 断流，
+      //   但 touchmove 全程持续（实测 9 : 1），所以坐标走 touchmove。
       wake();
     };
 
@@ -464,15 +506,20 @@ if (tier === "full" || tier === "lite") {
     const onPointerCancel = (e: PointerEvent) => {
       if (activeId !== null && e.pointerId !== activeId) return;
       activeId = null;
-      // pressed 保持 true：高光停在最后位置，等下一条 pointermove 继续跟随，
-      // 或等 pointerup/touchend 真正结束。
+      // pressed 保持 true：高光继续跟着 touchmove 走，
+      // 直到 touchend 真正结束。
       wake();
     };
 
     window.addEventListener("pointerdown", onPointerDown, { passive: true });
-    window.addEventListener("pointermove", onPointerMove, { passive: true });
     window.addEventListener("pointerup", onPointerUp, { passive: true });
     window.addEventListener("pointercancel", onPointerCancel, { passive: true });
+    // 【坐标主源】touchmove —— 滚动全程持续派发且不阻塞滚动
+    window.addEventListener("touchmove", onTouchMove, { passive: true });
+    // 同时保留 pointermove：部分场景（如触控笔）只有 pointer 事件。
+    // onPointerMove 内部已对 pointerType === "touch" 提前 return，
+    // 避免与 touchmove 重复写同一坐标。
+    window.addEventListener("pointermove", onPointerMove, { passive: true });
   }
 
   // 滚动 / 尺寸变化 → rect 失效。滚动过程本身不重测（等下一次 rAF 统一测），

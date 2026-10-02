@@ -49,6 +49,12 @@ const github = site.github || "";
     </script>
   </head>
   <body class="grain text-white antialiased">
+    <!-- 背景层：用 fixed 伪元素承载径向渐变，替代 body 的
+         `background-attachment: fixed`。后者在移动端底栏收缩
+         （视口高变化）时会重铺整片背景，导致底边出现色差带。
+         详见 global.css 顶部注释与 2026-10-02 的定位记录。 -->
+    <div class="bg-fixed" aria-hidden="true"></div>
+
     <!-- 折射滤镜定义：全站一次，供导航栏 / Modal 以 url(#liquid-refract) 引用 -->
     <LiquidFilter />
 
