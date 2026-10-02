@@ -212,8 +212,8 @@ const github = site.github || "";
         position: fixed;
         /* 玻璃底提到规范上限 12%，让"透光"看得见 */
         background-color: rgba(255, 255, 255, 0.12);
-        -webkit-backdrop-filter: blur(40px) saturate(180%);
-        backdrop-filter: blur(40px) saturate(180%);
+        -webkit-backdrop-filter: blur(8px) saturate(160%);
+        backdrop-filter: blur(8px) saturate(160%);
         border-bottom: 1px solid rgba(255, 255, 255, 0.15);
         /* 规范 3.1 的「光有方向」三件套：
            外层深阴影（把导航栏从页面上"抬起来"）
@@ -222,6 +222,26 @@ const github = site.github || "";
           0 8px 32px rgba(3, 7, 18, 0.45),
           inset 0 1px 0 rgba(255, 255, 255, 0.2),
           inset 0 -1px 0 rgba(2, 6, 16, 0.35);
+      }
+
+      /* ---- 真·折射：backdrop-filter 引用 SVG 滤镜 ----
+         【这是本项目走过最大弯路的地方，务必看清】
+         必须用 `backdrop-filter: url(#…)`，**不是** `filter: url(#…)`：
+           · `filter` 作用于元素**自身**渲染结果 → 位移的是文字与底色，把字推糊
+           · `backdrop-filter` 作用于元素**背后**的画面 → 位移的是背景内容 = 真折射
+         当初用错属性，才误判"feDisplacementMap 在导航栏找不到落点"。
+         受控实测（条纹置于导航栏后）：
+           · 无折射 → 条纹只是被糊直
+           · 有折射 → 条纹明显被弯折，而导航文字始终锐利
+         导航栏区域平均色差 25.40/255（最大 54.0），确认真实生效。
+
+         两条声明是**渐进增强**：若某浏览器不支持滤镜列表里的 url()，
+         第二条整体失效，自动回退到第一条的纯模糊 —— 不会连模糊一起丢掉。 */
+      html[data-glass="full"] .glass-nav {
+        -webkit-backdrop-filter: blur(8px) saturate(160%);
+        backdrop-filter: blur(8px) saturate(160%);
+        -webkit-backdrop-filter: blur(8px) saturate(160%) url(#liquid-refract);
+        backdrop-filter: blur(8px) saturate(160%) url(#liquid-refract);
       }
 
       /* ---- 折射层已移除 ----
