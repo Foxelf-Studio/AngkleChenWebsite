@@ -514,6 +514,57 @@ mask-image: linear-gradient(to bottom, #000 0px, #000 50px, transparent 64px);
 
 ---
 
+### 12.10 材质必须「响应环境」——四个响应源
+
+对照 Apple Liquid Glass 的定义（**让 UI 本身成为会响应环境和交互的动态材质**，
+而不只是「加一层半透明磨砂玻璃」），本站的响应源现状：
+
+| 响应源 | 实现 | 载体 |
+| --- | --- | --- |
+| 指针位置 | ✅ `liquid.ts` 元素级 `--mx/--my/--lite`（lerp 缓动） | 全站卡片 / 按钮 / chips |
+| 滚动位置 | ✅ `--nav-scrim`（0 → 0.35，140px 内 easeOut） | 导航栏 |
+| 触摸位置 | ✅ 触屏走 `pointerdown/move/up`，与桌面共用同一套变量 | 全站（移动端等价语言） |
+| 焦点 / 当前操作 | ✅ 非焦点卡片降权（`opacity .42` + `saturate .55`） | 网格容器 |
+| 背景内容明暗 | ❌ 未实现（固定白色 alpha，不自适应） | —— |
+
+### 12.11 滚动驱动导航栏「变实」
+
+- **实现**：`background-image: linear-gradient(rgba(3,7,18,var(--nav-scrim)), 同)`
+  —— CSS 背景**分层绘制**，`background-image` 画在 `background-color` 之上。
+  因此「变实」靠叠**深色**，不必提高白色 alpha（白玻璃被 12% 上限卡死，越不过去）。
+- **JS 只写一个变量**，rAF 节流，变化 < 0.004 不写（省掉无意义的样式重算）。
+- **刻意不做模糊半径渐变**：`backdrop-filter` 的模糊值逐帧变化 = 逐帧重算滤镜，
+  既昂贵、又会在部分 Chrome 版本上闪烁（灯箱那次已确认）。模糊恒定，只渐入遮罩 ——
+  实测已足够把白字对比度救回来。
+- **附带收益**：修掉「亮色图片滚过导航栏时白字读不出来」。
+
+### 12.12 Modal 打开时内容让位（空间层级）
+
+- 结构：`<div class="page-shell">` 包住 `main` + `footer`；**灯箱必须留在壳外**。
+- 效果：`html[data-liquid="on"][data-modal="open"] .page-shell`
+  → `transform: scale(0.94) translateY(12px)` + `opacity: 0.55`。
+- ⚠️ **`transform-origin` 必须由 JS 设为「当前视口中心」**（`50% ${scrollY + innerHeight/2}px`）。
+  长页面（文章页可达数千像素）若用默认的文档中心，滚动到中段再打开灯箱时，
+  缩放会把可见内容整体拉偏，看起来像页面在乱跑。
+- ⚠️ 页壳**不得包含 `position: fixed` 元素**（transform 会成为它们的包含块）。
+- ⚠️ **不要给页壳加常驻 `will-change`** —— 壳高可达数千像素，常驻提升合成层长期占用资源。
+
+### 12.13 触摸驱动：移动端的等价语言
+
+- **Pointer Events 统一了鼠标 / 触摸 / 笔**，所以「手指位置驱动高光」不需要另写一套逻辑，
+  复用同一套元素级变量即可 —— 这才是「跨设备统一的材质逻辑」。
+- 桌面：`pointermove` 持续跟随（`hasHover` 为真）。
+  触屏：`pointerdown` 点亮、`pointermove` 跟随、`pointerup/cancel` 释放
+  （`pressed` 置 false → `--lite` 归零 → 由 CSS 的 opacity 过渡淡出，形成点击反馈）。
+- **已移除 `deviceorientation` 分支**：iOS 13+ 必须调 `DeviceOrientationEvent.requestPermission()`
+  且在用户手势中申请，本站从未申请 → 它在 iOS 上**永远不触发**；
+  即便拿到，陀螺仪给的是「设备朝向」、没有绝对位置，会与触摸点互相打架。
+- **当前操作层只做「非焦点降权」，不加强焦点元素自身** ——
+  层级关系由「谁被突出」表达，而不是给焦点元素叠加更多特效。
+  选型时可在「仅自身加强」与「相邻后退」之间二选一，本站采用后者。
+
+---
+
 ## 附：修复记录
 
 **v1.0（相对两版原始文档的变更）**

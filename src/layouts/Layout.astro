@@ -97,9 +97,18 @@ const github = site.github || "";
       </div>
     </div>
 
-    <main class="pt-16">
-      <slot />
-    </main>
+    <!-- 页壳：Modal 打开时整体下沉后退。
+         这是 Liquid Glass「空间层级」的语言 —— 弹层浮起时，内容层必须**让位**，
+        而不是原地不动只盖一层遮罩（那样只有明暗变化，没有空间关系）。
+        两个关键约束：
+         1. **灯箱必须在壳外**（它是 body 的直接子元素），否则会被一起缩放
+         2. transform-origin 由 JS 按「当前视口中心」动态设置 ——
+            长页面若用默认的文档中心，滚动后缩放会让画面大幅位移
+         3. 壳内不得出现 position: fixed 元素（transform 会成为它们的包含块） -->
+    <div class="page-shell">
+      <main class="pt-16">
+        <slot />
+      </main>
 
     <!-- 页脚 -->
     <footer
@@ -139,7 +148,7 @@ const github = site.github || "";
           <div>
             <div class="text-white/80 text-sm font-medium">新版视觉效果</div>
             <p class="text-white/50 text-xs mt-1 leading-relaxed">
-              开启后，玻璃表面会跟随光标产生液态高光；关闭则回到原有样式。
+              开启后，玻璃会跟随光标与滚动产生光影变化；关闭则回到原有样式。
             </p>
           </div>
           <label class="liquid-switch">
@@ -159,6 +168,8 @@ const github = site.github || "";
         <p class="text-white/50 text-xs mt-8">© 2026 {siteTitle}</p>
       </div>
     </footer>
+    </div>
+    <!-- ↑ 页壳结束。灯箱必须留在壳外。 -->
 
     <!-- 图片灯箱：全站单例，点击正文图片放大查看 -->
     <Lightbox />
@@ -234,6 +245,19 @@ const github = site.github || "";
              · 用户 8 帧连拍逐帧定位导航栏边界 → 所有锐利内容都在导航栏之外
              · 自建 CDP 小步滚动连拍（scrollY 350→525）→ 锐利区全部在 y≥65
            故此处不再做任何处理。 */
+      }
+
+      /* ---- 滚动驱动「变实」（材质响应环境）----
+         CSS 背景是**分层绘制**的：background-image 画在 background-color 之上。
+         所以要「变实」只需再叠一层**深色**遮罩，不必提高白色 alpha
+         （白玻璃被规范限死在 12%，越不过去）。
+         --nav-scrim 由 src/scripts/liquid.ts 随 scrollY 写入 0 → 0.35。
+         附带收益：修掉「亮色图片滚过导航栏时白字读不出来」的老问题。 */
+      html[data-liquid="on"] .glass-nav {
+        background-image: linear-gradient(
+          rgba(3, 7, 18, var(--nav-scrim, 0)),
+          rgba(3, 7, 18, var(--nav-scrim, 0))
+        );
       }
 
       /* ---- 真·折射：backdrop-filter 引用 SVG 滤镜 ----

@@ -198,16 +198,34 @@
       img.src = src;
       img.alt = alt;
       lastFocus = document.activeElement as HTMLElement | null;
+
       box.classList.add("is-open");
       box.setAttribute("aria-hidden", "false");
-      // 锁滚动：用 overflow 而非 position: fixed，避免页面跳动
+
+      // 锁滚动：用 overflow 而非 position: fixed，避免页面跳动。
+      // 必须先锁、再算原点 —— 若锁定时滚动位置被重置，原点就会算错。
       document.documentElement.style.overflow = "hidden";
+
+      // 让位原点 = **当前视口中心**，而不是默认的文档中心。
+      // 长页面（文章页可达数千像素）若用文档中心，滚动到中段再打开灯箱时，
+      // 缩放会把可见内容整体拉偏，看起来像页面在乱跑。
+      const shell = document.querySelector<HTMLElement>(".page-shell");
+      if (shell) {
+        const cy = Math.round(window.scrollY + window.innerHeight / 2);
+        shell.style.transformOrigin = `50% ${cy}px`;
+      }
+
+      // 让内容层后退（样式在 global.css 的 html[data-modal="open"] .page-shell）
+      document.documentElement.dataset.modal = "open";
+
       box.querySelector<HTMLElement>(".lightbox__close")?.focus();
     }
 
     function close() {
       box.classList.remove("is-open");
       box.setAttribute("aria-hidden", "true");
+      // 先摘掉让位状态（触发回位过渡），再解锁滚动
+      delete document.documentElement.dataset.modal;
       document.documentElement.style.overflow = "";
       lastFocus?.focus();
     }

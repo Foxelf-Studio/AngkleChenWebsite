@@ -294,6 +294,48 @@ html[data-liquid="off"] .liquid-sheen::after {
    而本条选择器特异性高于 @layer utilities 里的 .isolate，
    写 auto 会把原有的 isolate 一起干掉 → 破坏原有渲染。 */
 
+/* ============ 页壳：Modal 打开时内容「让位」 ============
+   Liquid Glass 的空间层级语言：弹层浮起时，内容层要**整体后退**，
+   而不是原地不动只盖一层遮罩（那样只有明暗变化，没有空间关系）。
+   只用 transform + opacity（合成层属性），不碰布局属性。
+   开关关闭时不生效（还原原有观感）。 */
+.page-shell {
+  transition:
+    transform 500ms cubic-bezier(0.16, 1, 0.3, 1),
+    opacity 500ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+html[data-liquid="on"][data-modal="open"] .page-shell {
+  transform: scale(0.94) translateY(12px);
+  opacity: 0.55;
+  /* 只在真正需要时提升合成层。这里刻意不用常驻 will-change：
+     页壳高度可达数千像素，常驻提升会长期占用合成层资源。
+     过渡结束由浏览器自行回收。 */
+  will-change: transform, opacity;
+}
+/* 遮罩淡出后取消提升 */
+html[data-liquid="on"]:not([data-modal="open"]) .page-shell {
+  will-change: auto;
+}
+
+/* ============ 当前操作层：非焦点元素后退 ============
+   对应 Liquid Glass 四层结构里最上面的「当前操作」层。
+   只做**降权**（非悬停的兄弟元素后退），不改变悬停元素自身 ——
+   层级关系由「谁被突出」表达，而不是给焦点元素加更多特效。
+   ⚠️ 与「外阴影结构必须一致」那条铁律的出发点不同：
+     那条防的是「用压暗邻域背景制造变白错觉」；这里是主动、对称地把
+     非焦点元素降权，方向相反（变暗而非变白），实现后仍需实测边缘。 */
+@media (hover: hover) and (pointer: fine) {
+  main .grid > * {
+    transition:
+      opacity 500ms cubic-bezier(0.16, 1, 0.3, 1),
+      filter 500ms cubic-bezier(0.16, 1, 0.3, 1);
+  }
+  html[data-liquid="on"] main .grid:hover > *:not(:hover) {
+    opacity: 0.42;
+    filter: saturate(0.55);
+  }
+}
+
 /* ============ 动效 ============ */
 .fade-in {
   animation: fadeUp 600ms cubic-bezier(0.16, 1, 0.3, 1) both;
