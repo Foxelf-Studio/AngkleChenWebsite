@@ -339,7 +339,40 @@ transition-all duration-500 ease-[cubic-bezier(0.16,1,0.3,1)]
 
 **调试开关**：URL 加 `?glass=full|lite|static|fallback` 可强制档位，用于逐档验收。生产环境不带参数时完全不生效。
 
-### 12.6 用户开关：`data-liquid`
+### 12.7 底栏顶边：不要造亮边（v1.2 修订）
+
+> **本节修订第十一节「页脚骨架」**。原骨架为 `bg-white/8 ... border-t border-white/15`，
+> 在整屏宽面板上会形成一道可见的「亮带」，已废弃。
+
+**问题**：满宽页脚上的 `border-t border-white/15` 形成 1px 亮线。实测亮度剖面——
+页脚之上 43、边框线 **88**、页脚内部 59。在整屏宽度上这道硬边非常刺眼。
+
+**关键认知**：**亮边不是能"柔化"的，只能"消除"。**
+任何「只在页脚内部变亮」的处理（细线、渐隐高光、渐变底色），都会在边界造出
+「比上方亮、也比下方亮」的一条带 —— 那恰恰是要消除的东西。实测把 1px 实线换成
+20px 渐隐光晕后，顶边仍有 17 级亮度突跳。
+
+**正解**：
+```css
+/* 背景从**全透明**起步，边界处与上方无缝，再缓慢爬到 8% */
+background-image: linear-gradient(
+  to bottom,
+  rgba(255,255,255,0) 0px,
+  rgba(255,255,255,0.08) 180px,
+  rgba(255,255,255,0.08) 100%
+);
+/* 页脚**不加** backdrop-filter：背后只有 body 平滑渐变，模糊零收益；
+   而 backdrop-saturate 会在边界造成颜色台阶（同规则 5） */
+```
+
+实测：边界相邻行落差 **45（原 border-t）→ 4（现值）**，边界处 43→43 无缝。
+
+### 12.8 宽扁容器的跟手高光
+
+`.liquid-sheen::after` 的默认半径（340px）是为卡片这类近方形元素设计的。
+导航栏等**宽扁容器**必须用 `.liquid-sheen--wide`（620px），否则高光只覆盖一小块。
+
+### 12.9 用户开关：`data-liquid`
 
 底栏提供「新版视觉效果」开关，让用户自行决定是否启用液态层。
 
@@ -349,7 +382,14 @@ transition-all duration-500 ease-[cubic-bezier(0.16,1,0.3,1)]
 - **隐私模式容错**：`localStorage` 抛异常时，开关当次仍应生效，只是不记忆。
 - **开关自身也遵循玻璃规范**：玻璃底 8%–12%（含 hover/checked）、双向边框 + inset 顶高光 + 外层深阴影、`transform` 位移做状态指示（不靠颜色单独传递状态）、`min-height: 44px` 触控目标、`focus-visible` 金色焦点环。
 
-> ⚠️ 写关闭态规则时**不可**顺手把 `isolation` 重置为 `auto`。`glass.ts` 的 `card` 常量本身带 `isolate`（原有玻璃拟态设计的一部分），而关闭态选择器特异性高于 `@layer utilities` 里的 `.isolate`，会把它一起干掉、破坏原有渲染。仅需处理 `.liquid-sheen` 的 `position` 与 `::after` 的 `opacity`。
+> ⚠️ **关闭态只允许写 `opacity: 0`。** 曾写过
+> `html[data-liquid="off"] .liquid-sheen { position: static }`，其特异性 (0,2,1)
+> 压过 `.glass-nav { position: fixed }` (0,1,0)，导致**关掉开关时导航栏失去吸顶**。
+> 同理**不可**把 `isolation` 重置为 `auto`——`glass.ts` 的 `card` 常量本身带 `isolate`
+> （原设计的一部分），关闭态选择器会把它一并干掉。
+> **通用规则**：写「关闭态/重置」CSS 前，先确认特异性不会压过别处更重要的声明。
+> 这类问题**读代码发现不了，必须实测尺寸/位置**（当时靠比对 `scrollHeight` 的 65px 差值定位）。
+
 
 > ⚠️ **实现注意**：Tailwind v4 的工具类位于 `@layer utilities`，**层叠优先级低于普通 CSS 规则**。
 > 因此自定义 CSS 里**不要设置 `position`/`display` 这类会被工具类管理的属性**——会静默覆盖掉 `.fixed`/`.absolute`。
