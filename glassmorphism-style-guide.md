@@ -339,6 +339,18 @@ transition-all duration-500 ease-[cubic-bezier(0.16,1,0.3,1)]
 
 **调试开关**：URL 加 `?glass=full|lite|static|fallback` 可强制档位，用于逐档验收。生产环境不带参数时完全不生效。
 
+### 12.6 用户开关：`data-liquid`
+
+底栏提供「新版视觉效果」开关，让用户自行决定是否启用液态层。
+
+- **与 `data-glass` 正交**：`data-glass` 是自动检测的「能力档位」（设备能跑多好），`data-liquid` 是「用户偏好」（想不想要）。用户关闭时**压过一切档位**，完全还原原有玻璃拟态。
+- **必须防 FOUC**：偏好在 `<head>` 用 **`is:inline`** 脚本（不能是模块脚本——模块是 defer 的，执行太晚）于**首次绘制前**写入 `<html>` 属性，否则会先按默认渲染再被纠正，闪一下。
+- **关闭时停止运算**：`liquid.ts` 的 rAF 循环要真正停掉，不能空转烧电。高光的隐藏由 CSS 负责，无需清理已写入的内联变量。
+- **隐私模式容错**：`localStorage` 抛异常时，开关当次仍应生效，只是不记忆。
+- **开关自身也遵循玻璃规范**：玻璃底 8%–12%（含 hover/checked）、双向边框 + inset 顶高光 + 外层深阴影、`transform` 位移做状态指示（不靠颜色单独传递状态）、`min-height: 44px` 触控目标、`focus-visible` 金色焦点环。
+
+> ⚠️ 写关闭态规则时**不可**顺手把 `isolation` 重置为 `auto`。`glass.ts` 的 `card` 常量本身带 `isolate`（原有玻璃拟态设计的一部分），而关闭态选择器特异性高于 `@layer utilities` 里的 `.isolate`，会把它一起干掉、破坏原有渲染。仅需处理 `.liquid-sheen` 的 `position` 与 `::after` 的 `opacity`。
+
 > ⚠️ **实现注意**：Tailwind v4 的工具类位于 `@layer utilities`，**层叠优先级低于普通 CSS 规则**。
 > 因此自定义 CSS 里**不要设置 `position`/`display` 这类会被工具类管理的属性**——会静默覆盖掉 `.fixed`/`.absolute`。
 > 需要给这类属性兜底时，用 `:where()` 把特异性压到 0（如 `:where(.liquid-sheen) { position: relative }`）。
