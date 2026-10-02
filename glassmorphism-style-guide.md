@@ -339,7 +339,7 @@ transition-all duration-500 ease-[cubic-bezier(0.16,1,0.3,1)]
 
 **调试开关**：URL 加 `?glass=full|lite|static|fallback` 可强制档位，用于逐档验收。生产环境不带参数时完全不生效。
 
-### 12.7 底栏顶边：不要造亮边（v1.2 修订）
+### 12.6 底栏顶边：不要造亮边（v1.2 修订）
 
 > **本节修订第十一节「页脚骨架」**。原骨架为 `bg-white/8 ... border-t border-white/15`，
 > 在整屏宽面板上会形成一道可见的「亮带」，已废弃。
@@ -367,12 +367,12 @@ background-image: linear-gradient(
 
 实测：边界相邻行落差 **45（原 border-t）→ 4（现值）**，边界处 43→43 无缝。
 
-### 12.8 宽扁容器的跟手高光
+### 12.7 宽扁容器的跟手高光
 
 `.liquid-sheen::after` 的默认半径（340px）是为卡片这类近方形元素设计的。
 导航栏等**宽扁容器**必须用 `.liquid-sheen--wide`（620px），否则高光只覆盖一小块。
 
-### 12.9 用户开关：`data-liquid`
+### 12.8 用户开关：`data-liquid`
 
 底栏提供「新版视觉效果」开关，让用户自行决定是否启用液态层。
 
