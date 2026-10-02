@@ -119,6 +119,10 @@ if (tier === "full" || tier === "lite") {
 
   let raf = 0;
 
+  // 用户开关（data-liquid）。关闭时整个液态层不参与运算，
+  // 由底栏「新版视觉效果」开关控制，偏好存在 localStorage。
+  let enabled = document.documentElement.dataset.liquid !== "off";
+
   // 缓动系数：越小越"粘滞"。这是液态感的来源 ——
   // 高光"追着"指针走，而不是硬贴在指针上。
   const EASE = 0.12;
@@ -127,6 +131,8 @@ if (tier === "full" || tier === "lite") {
 
   function tick() {
     raf = 0;
+    // 用户关掉开关后立刻停止运算（事件里已 cancel，这里是双保险）
+    if (!enabled) return;
     if (rectsDirty) refreshRects();
 
     let moving = false;
@@ -167,7 +173,9 @@ if (tier === "full" || tier === "lite") {
   }
 
   function wake() {
-    if (!raf && !document.hidden) raf = requestAnimationFrame(tick);
+    // enabled 为 false 时（用户关掉开关）完全不排帧
+    if (!enabled || raf || document.hidden) return;
+    raf = requestAnimationFrame(tick);
   }
 
   const onPointerMove = (e: PointerEvent) => {
@@ -213,6 +221,20 @@ if (tier === "full" || tier === "lite") {
     } else if (!document.hidden) {
       rectsDirty = true;
       wake();
+    }
+  });
+
+  // 底栏「新版视觉效果」开关：立即生效，并停掉关闭后的无效运算。
+  // 关闭时只是不运算 —— 高光的隐藏由 CSS（html[data-liquid="off"]）负责，
+  // 因此不需要清理各元素上已写入的内联变量。
+  document.addEventListener("liquidprefchange", () => {
+    enabled = document.documentElement.dataset.liquid !== "off";
+    if (enabled) {
+      rectsDirty = true;
+      wake();
+    } else if (raf) {
+      cancelAnimationFrame(raf);
+      raf = 0;
     }
   });
 

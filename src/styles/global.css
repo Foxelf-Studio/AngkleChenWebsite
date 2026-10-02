@@ -261,6 +261,25 @@ html[data-glass="lite"] .liquid-surface {
   --sheen-t: 0.7;
 }
 
+/* ============ 用户开关：data-liquid ============
+   与 data-glass（自动检测的「能力档位」）正交：
+     data-glass  决定"设备能跑多好的效果"
+     data-liquid 决定"用户想不想要这个效果"
+   用户关掉时**压过一切档位**，完全还原原有玻璃拟态。
+   默认值由 <head> 里的内联脚本在首次绘制前写入，避免闪一下再切。 */
+html[data-liquid="off"] .liquid-sheen::after {
+  opacity: 0;
+}
+/* 关掉时不需要高光的定位锚点 */
+html[data-liquid="off"] .liquid-sheen {
+  position: static;
+}
+/* 注意：这里**不能**顺手写 isolation: auto。
+   glass.ts 的 card 常量本身就带 isolate（原有玻璃拟态设计的一部分），
+   而本条选择器特异性高于 @layer utilities 里的 .isolate，
+   写 auto 会把原有的 isolate 一起干掉 → 破坏原有渲染。
+   .liquid-surface 上重复声明的 isolation: isolate 与 card 的 isolate 同值，无需清理。 */
+
 /* ============ 动效 ============ */
 .fade-in {
   animation: fadeUp 600ms cubic-bezier(0.16, 1, 0.3, 1) both;
