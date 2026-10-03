@@ -32,6 +32,35 @@
 | 强调 · 浅金 | `#F3DCA8` | 香槟金元素上的文字/图标 |
 | 文字 | `white` 各透明度 | 见下方「排版系统」 |
 
+#### 2.1 香槟金的允许清单（2026-10-03 明确化）
+
+旧条文只写「主 CTA、关键数字、高亮文字」，**没有定义边界**，导致
+「hover 变色算不算？」「正文链接算不算？」「金色边框算不算？」无法判断。
+现明确为**穷举清单** —— 不在清单内即为违规：
+
+| # | 允许用法 | 形式 | 示例 |
+|---|---|---|---|
+| 1 | **主 CTA** | 背景 + 边框 + 文字（唯一大面积用法） | `cta` 常量的 `bg-[#E4B863]/12` |
+| 2 | **关键数字** | 文字色 | 软件页版本号 `text-[#E4B863] font-mono` |
+| 3 | **品牌 / 身份高亮文字** | 文字色 | 首页「我是**陈叔叔**」的姓名 |
+| 4 | **状态标记** | 文字色 + 圆点 | 「阅读中」标记 |
+| 5 | **链接 hover 变色** | 文字色（仅 hover 态） | 导航/页脚链接、卡片标题的 `hover:text-[#E4B863]` |
+| 6 | **正文内链接** | 文字色 + `text-decoration-color` | `.md-body a` |
+| 7 | **引用块左边线** | 1px 边框 | `.md-body blockquote` |
+| 8 | **香槟金边 chip** | 1px 边框 + 文字色（`platformChip`） | 软件页的平台标签 |
+
+**共同约束（判据是"形状"而非"面积"）**：
+- 允许的**非 CTA** 用法一律是 **1px 线条** 或 **单字/单词变色** —— 永不构成色块。
+- 禁止任何**填充式**金色背景（`bg-[#E4B863]` 无 alpha 修饰、或 alpha > 15%）。
+- 禁止金色用于**大段正文**（会破坏"颜色属于背景、玻璃无色"的分工）。
+
+> **为什么 hover 变色是允许的**：它是"高亮文字"在**交互态**下的自然延伸 ——
+> 用户指向链接时，用唯一强调色提示"这是可点的那个"。它只在指针悬停的一瞬出现，
+> 不构成常驻装饰。**但静态的链接文字不得是金色**（否则全站链接发黄，金色贬值）。
+
+> **代码现状核对（2026-10-03）**：全站 17 处金色引用逐条核对，**全部落在上表 8 类内**，
+> 无越界。校验脚本：`.workbuddy/tools/speccheck.mjs`。
+
 背景底色配方（固定模板，替换时勿移除光源）：
 
 ```css
@@ -49,28 +78,56 @@ background-image:
 ### 3.1 玻璃面板（卡片 / 区块 / 导航 / 页脚通用基底）
 
 ```
-bg-white/8 backdrop-blur-[60px] backdrop-saturate-[180%]
+bg-white/8
 border border-white/15 rounded-3xl
 shadow-[0_16px_40px_rgba(3,7,18,0.5),inset_0_1px_0_rgba(255,255,255,0.22),inset_0_-1px_0_rgba(2,6,16,0.35)]
 [background-image:linear-gradient(to_bottom,rgba(255,255,255,0.12),transparent_50%)]
 ```
 
 - 允许透明度区间：`bg-white/5` ~ `bg-white/12`。**任何静态或临时态（含 hover/focus/active）都不得超过 `bg-white/12`**，杜绝 `bg-white/15` 及以上的实心化。
-- 模糊值：面板/卡片/导航/页脚用 `backdrop-blur-[60px]`，小型浮层（下拉、tooltip）用 `backdrop-blur-[40px]`；**必须成对出现 `backdrop-saturate-[180%]`**。
 - 圆角只允许 `rounded-2xl`（小控件）或 `rounded-3xl`（面板/卡片）。
 - 每个面板必须同时具备：外层深阴影 + `inset` 顶部高光 + `inset` 底部暗缘（光有方向）。此规则对 chips 等小徽章同样适用。
+
+#### 3.1.1 `backdrop-filter` 的适用范围（2026-10-03 修订，重要）
+
+**面板默认不含 `backdrop-filter`。** 旧条文曾统一要求
+`backdrop-blur-[60px] backdrop-saturate-[180%]`，现按铁律 6 收窄为**白名单制**：
+
+| 场景 | 用 `backdrop-filter`？ | 原因 |
+|---|---|---|
+| **页面内的卡片 / 区块 / 面板** | ❌ **不用** | 背后是纯色 / 平滑渐变的页面底色，**模糊零收益**；而模糊核**越过元素边界采样**，把相邻卡片的亮边框采进来 → 相邻元素边缘出现一条宽度 ≈ 模糊半径的**竖直亮带**。零收益、全副作用。 |
+| **背后会滚过正文的固定导航栏** | ✅ 用 | 背后确实有内容在滚，模糊**有真实效果**；且它是全宽条状元素，左右无同位邻居。 |
+| **覆盖在正文之上的浮层**（灯箱 / Modal / 下拉） | ✅ 用 | 背靠正文，模糊是空间层级的核心表达。 |
+
+- **白名单外的元素一律不加**，包括按钮（§3.2）、chips（§3.5）、状态面板（§八）。
+- 白名单内的元素**必须成对出现** `backdrop-saturate-[180%]`（只写 blur 是禁止项）。
+- 白名单内的元素还需遵守：带 `isolate translate-z-0`（隔离合成层）、**祖先不得用 `opacity` 淡入淡出**（见 §12.3 第 6 条）。
+
+> **取证依据（2026-08-14）**：同一条「相邻卡片边缘亮带」缺陷**连续踩坑 6 次**，
+> 最终定位为「页面内卡片用 `backdrop-filter`」。当时的判据：把 blur 半径从 60px
+> 缩到 32px，用户反馈「亮条变细」；**彻底移除后亮带消失**。据此确立「页面内卡片
+> 一律不用模糊」。
 
 ### 3.2 按钮
 
 ```
-bg-white/10 backdrop-blur-[40px] backdrop-saturate-[180%]
+bg-white/10
 border border-white/20 rounded-2xl text-white
 shadow-[0_4px_16px_rgba(3,7,18,0.45),inset_0_1px_0_rgba(255,255,255,0.25),inset_0_-1px_0_rgba(2,6,16,0.3)]
-hover:bg-white/12 hover:border-white/30 hover:-translate-y-0.5
-hover:shadow-[0_10px_32px_rgba(3,7,18,0.55),inset_0_1px_0_rgba(255,255,255,0.35),inset_0_-1px_0_rgba(2,6,16,0.3)]
+hover:bg-white/12 hover:border-white/30
+hover:shadow-[0_4px_16px_rgba(3,7,18,0.45),inset_0_1px_0_rgba(255,255,255,0.35),inset_0_-1px_0_rgba(2,6,16,0.3)]
 active:scale-[0.97]
 transition-all duration-500 ease-[cubic-bezier(0.16,1,0.3,1)]
 ```
+
+> **【2026-10-03 修订】删除了原有的 `backdrop-blur-[40px] backdrop-saturate-[180%]`
+> 与 `hover:-translate-y-0.5`。**
+> - **模糊**：违背铁律 6「页面内的卡片/按钮一律不用 `backdrop-filter`」。按钮背后是
+>   页面底色，模糊零收益；模糊核越过边界采样反而会把相邻卡片的亮边框采进来。
+>   代码 `glass.ts` 的 `btn` 早已不含模糊，本条是过期残留。
+> - **位移**：见 §12.19【铁律】——hover 不做位移。
+> - **外阴影静态与 hover 结构一致**（同为 `0 4px 16px`），只调 inset 亮度，
+>   符合铁律 2「外阴影必须结构一致」，避免相邻元素边缘亮度突变。
 
 - **主 CTA（唯一香槟金元素，也是「玻璃无色」铁律的唯一豁免）**：`bg-[#E4B863]/12 border-[#E4B863]/40 text-[#F3DCA8]`；hover 时 `hover:bg-[#E4B863]/15 hover:border-[#E4B863]/60`。金色只用于 CTA 按钮，其余按钮一律无色玻璃。
   - **落地常量**：`src/lib/glass.ts` 的 `cta`（2026-10-03 新增）。
@@ -86,7 +143,7 @@ transition-all duration-500 ease-[cubic-bezier(0.16,1,0.3,1)]
 ### 3.3 输入框
 
 ```
-bg-white/6 backdrop-blur-[40px] backdrop-saturate-[180%]
+bg-white/6
 border border-white/15 rounded-2xl text-white placeholder-white/35
 shadow-[inset_0_1px_0_rgba(255,255,255,0.15),inset_0_-1px_0_rgba(2,6,16,0.3)]
 focus:outline-none focus:border-white/35 focus:bg-white/10
@@ -95,6 +152,17 @@ transition-all duration-500 ease-[cubic-bezier(0.16,1,0.3,1)]
 ```
 
 - 输入框是**唯一**用 `focus:`（鼠标点击与键盘都触发高亮）的控件，因为点击输入框本就该有视觉反馈；其余控件统一用 `focus-visible:`（仅键盘触发）。
+- **输入框不使用 `backdrop-filter`**（同 §3.1.1 白名单）：它嵌在页面内、背后是页面底色，
+  模糊零收益，且模糊核越界会让相邻元素边缘出亮带。玻璃感由 inset 双向高光表达。
+- 聚焦时补 `focus:border-white/35` + `focus:bg-white/10`（提亮但**不越过 `/12` 上限**），
+  外加上一层香槟金柔光 `0 0 0 3px rgba(228,184,99,0.15)` 作为聚焦信号。
+  > 这是**焦点环之外**的例外：非输入控件用 §3.4 的**白色**焦点环，
+  > 输入框用香槟金柔光。区分理由：输入框的聚焦是"进入编辑"，属**功能态**；
+  > 其余控件的焦点环是"键盘导航指示"，属**无障碍态** —— 两者语义不同，故观感可区分。
+  > **注意这里只在 focus 时加外发光，不改变静态外阴影的偏移/模糊**（铁律 2）。
+
+> **【2026-10-03 修订】删除了原有的 `backdrop-blur-[40px] backdrop-saturate-[180%]`。**
+> 输入框属页面内元素，不在 §3.1.1 的模糊白名单中。旧条文与铁律 6 冲突，属过期残留。
 
 ### 3.4 焦点环（全局统一）
 
@@ -161,14 +229,27 @@ transition-all duration-500 ease-[cubic-bezier(0.16,1,0.3,1)]
 ### 3.5 标签徽章（chips）
 
 ```
-inline-block bg-white/6 backdrop-blur-[30px] backdrop-saturate-[160%]
+inline-block bg-white/6
 border border-white/15 rounded-2xl text-white/85 text-xs px-3 py-1
 shadow-[inset_0_1px_0_rgba(255,255,255,0.15),inset_0_-1px_0_rgba(2,6,16,0.3)]
 hover:bg-white/12 hover:border-white/30
 transition-all duration-500 ease-[cubic-bezier(0.16,1,0.3,1)]
 ```
 
-- chips 属于「超小徽章」，豁免 3.1 的面板模糊值，允许降为 `backdrop-blur-[30px]` + `backdrop-saturate-[160%]`；但仍须保留「光有方向」（顶高光 + 底暗缘）。
+- chips **不使用 `backdrop-filter`**，与铁律 6 一致。
+- 但仍须保留「光有方向」：顶高光（`inset_0_1px_0`）+ 底暗缘（`inset_0_-1px_0`）必须在。
+- 玻璃感由「半透明底 + 细边框 + inset 双向高光」表达即可 —— 小面积元素上模糊本就不可见。
+
+> **【2026-10-03 修订】删除了原有的 `backdrop-blur-[30px] backdrop-saturate-[160%]`
+> 与「超小徽章豁免」说明。**
+> 旧条文曾以「超小徽章可豁免 §3.1 的面板模糊值」为由保留 30px 模糊。但这条豁免
+> **与铁律 6 冲突且被取证推翻**（2026-08-14，同一现象连续踩坑 6 次）：
+> - 模糊在小面积上**几乎不可见** —— 零收益；
+> - 模糊核**会越过元素边界采样**，把相邻卡片 `border-white/15` 的亮边框采进
+>   chips 边缘 → 表现为 chips 旁边一条宽度 ≈ 模糊半径的**竖直亮带** —— 全副作用。
+>
+> 这是「零收益、全副作用」的典型，因此**取消豁免、一律不用模糊**。
+> 代码 `glass.ts` 的 `tagChip` / `platformChip` 从未包含模糊，本条为旧残留。
 
 ---
 
@@ -211,10 +292,20 @@ transition-all duration-500 ease-[cubic-bezier(0.16,1,0.3,1)]
 
 - **统一缓动**：`ease-[cubic-bezier(0.16,1,0.3,1)]`（spring 惯性）。
 - **统一时长**：`duration-300` ~ `duration-500`（**禁止 `duration-100` / `duration-150`**）。
-- **Hover**：即时但有物理惯性——`hover:-translate-y-0.5` + 边框提升到 `border-white/30` + 阴影加深；不允许缩放（scale）作为 hover 反馈。
+- **Hover**：即时但有物理惯性——**边框提升到 `border-white/30` + 背景提亮 + 内阴影高光增强**；
+  **不做任何位移**（见下方说明），不允许缩放（scale）作为 hover 反馈。
 - **Active**：`active:scale-[0.97]`（明显压平，有碰撞感）。
 - **入场动效白名单**：只允许「位移 + 透明度」组合（fadeUp：`translateY(14px)→0` + `opacity 0→1`，600ms spring）；**禁止**纯 `opacity` 淡入超过 300ms、禁止模糊景深、禁止 `bounce`/`elastic` 缓动。
 - **降级**：所有动效必须提供 `@media (prefers-reduced-motion: reduce)` 备选（关闭动效）。
+
+> **【2026-10-03 修订】删除本节的 `hover:-translate-y-0.5`。**
+> 旧文本写「Hover：即时但有物理惯性——`hover:-translate-y-0.5` + 边框提升…」，
+> 与 §12.19【铁律】「卡片/按钮 hover 一律不做位移」直接冲突，且代码里
+> `btn` / `cardHover` 早已移除该位移。**以 §12.19 为准**：
+> 卡片的「上浮感」用**阴影与高光**表达，不用位置 —— 因为 hover 上浮会与
+> 「邻卡后退（缩小）」同时出现，一张往上飘、其余往里缩，两种位移方向打架，
+> **空间关系读不出来**。表达「当前操作层」用**单一**手段：焦点元素保持不动、
+> 其余元素整体后退。
 
 ---
 
@@ -308,15 +399,21 @@ transition-all duration-500 ease-[cubic-bezier(0.16,1,0.3,1)]
 
 - 紫粉 AI 渐变背景（`#667eea`、`#764ba2`、`#f093fb` 一类 indigo-purple-pink 组合）
 - 纯色平面背景上直接使用（必须有光源或图片，玻璃才有东西可模糊）
+- **页面内元素使用 `backdrop-filter`**（卡片 / 按钮 / chips / 输入框 / 状态面板）。
+  只有 §3.1.1 白名单内的**固定导航栏**与**覆盖正文的浮层**可用。
+  > 「低模糊值 `backdrop-blur-sm` 或裸 `backdrop-blur`」是这条的子集 ——
+  > 旧条文只禁了低模糊值，现收紧为**页面内一律禁止**（2026-08-14 取证：
+  > 相邻卡片亮带，同现象连踩 6 次，根因就是页面内卡片用了模糊）。
 - 玻璃透明度 ≥ 15%（`bg-white/15` 及以上，**含 hover/active 临时态**；金色 CTA 的 hover 到 `/15` 是唯一豁免）
-- 低模糊值 `backdrop-blur-sm` 或裸 `backdrop-blur`
-- 省略 `backdrop-saturate`
+- 白名单内元素省略 `backdrop-saturate`
 - 给玻璃面板本身上色（玻璃无色，颜色属于背景；金色 CTA 是唯一豁免）
 - 不透明背景 `bg-white` / `bg-black`
 - 快速过渡 `duration-100` / `duration-150`
 - `bounce` / `elastic` 缓动曲线
+- hover 位移（`hover:-translate-y-*` 等，见 §12.19）
 - 渐变文字（`background-clip: text`）
 - 单侧粗边框装饰（`border-left`/`border-right` accent stripe）
+- 同一屏出现**两个及以上**金色 CTA
 - 卡片里套卡片（嵌套玻璃卡片）
 - 每个 section 标题上方都放 tiny uppercase eyebrow 标签
 - 通用组件库的圆角卡片 / 模糊阴影 / 重渐变默认样式泄漏
@@ -326,15 +423,17 @@ transition-all duration-500 ease-[cubic-bezier(0.16,1,0.3,1)]
 ## 十、交付自检清单（逐条打勾）
 
 ### Token 检查
-- [ ] 面板含 `bg-white/8 backdrop-blur-[60px] backdrop-saturate-[180%] border border-white/15 rounded-3xl` + 定向阴影（inset 顶高光 + 底暗缘）
-- [ ] 按钮含 `bg-white/10 backdrop-blur-[40px] backdrop-saturate-[180%] border border-white/20 rounded-2xl` 三件套
-- [ ] 输入框含 `bg-white/6 backdrop-blur-[40px] backdrop-saturate-[180%]` + 香槟金 focus 环
-- [ ] 每个面板都带 `backdrop-saturate-[180%]`（chips 允许 160%）
+- [ ] 面板含 `bg-white/8 border border-white/15 rounded-3xl` + 定向阴影（inset 顶高光 + 底暗缘）；**不含 `backdrop-blur`**（§3.1.1）
+- [ ] 按钮含 `bg-white/10 border border-white/20 rounded-2xl` 三件套；**不含 `backdrop-blur`**
+- [ ] 输入框含 `bg-white/6` + 香槟金 focus 柔光；**不含 `backdrop-blur`**
+- [ ] `backdrop-filter` **只出现在白名单**：固定导航栏、覆盖正文的浮层（灯箱/Modal/下拉）；白名单内**必须成对出现** `backdrop-saturate`
+- [ ] 主 CTA 用金色 token（`cta`），且**一屏不超过一个**
 - [ ] 噪点层（feTurbulence 2%–3%）存在
 
 ### 禁止项检查
 - [ ] 无 `rounded-none/sm/rounded`、无 `bg-white/black/gray-*`、无 `shadow-none`
 - [ ] 无 `backdrop-blur-sm` / 裸 `backdrop-blur`、无 `duration-100/150`
+- [ ] **页面内元素无 `backdrop-blur-*`**（卡片/按钮/chips/输入框/状态面板）
 - [ ] 无紫粉 AI 渐变
 - [ ] 任何玻璃（含 hover/active）透明度未达 `bg-white/15`
 
@@ -342,8 +441,12 @@ transition-all duration-500 ease-[cubic-bezier(0.16,1,0.3,1)]
 - [ ] 深墨夜景底色 + 2–3 个大半径柔和光斑
 - [ ] 玻璃透明度在 5%–12% 之间（含临时态）
 - [ ] 光有方向（顶边受光 + 底边背光 + 外层深阴影）
-- [ ] 香槟金仅出现在主 CTA / 关键数字 / 高亮文字，无大面积铺色
+- [ ] 香槟金仅出现在 §2.1 的**八类允许清单**内（主 CTA / 关键数字 / 品牌高亮 /
+      状态标记 / 链接 hover / 正文链接 / 引用左边线 / 金色边 chip）；
+      无填充式金色色块、无大段金色正文
+- [ ] 同一屏金色 CTA ≤ 1 个
 - [ ] 无 bounce/elastic 缓动、无渐变文字、无单侧粗边框、无嵌套卡片
+- [ ] hover **不做位移**（无 `hover:-translate-y-*`，见 §12.19）
 
 ### 通用交付检查
 - [ ] 响应式在手机/平板/桌面稳定，无横向溢出
@@ -357,16 +460,42 @@ transition-all duration-500 ease-[cubic-bezier(0.16,1,0.3,1)]
 
 ## 十一、导航栏 / Hero / 页脚骨架（快速起步）
 
+> **本节示例已与代码对齐（2026-10-03）。** 权威实现在
+> `src/layouts/Layout.astro` —— 骨架只是起步参考，数值冲突时**以代码为准**。
+
 ### 导航栏
 
+**这是 `backdrop-filter` 白名单中的元素**（背后会滚过正文，模糊有真实效果）。
+
 ```html
-<nav class="bg-white/8 backdrop-blur-[40px] backdrop-saturate-[180%] border-b border-white/15 px-6 md:px-8">
+<nav class="glass-nav liquid-surface liquid-sheen liquid-sheen--wide
+  fixed top-0 left-0 right-0 z-40 px-6 md:px-8">
   <div class="flex items-center justify-between max-w-6xl mx-auto gap-6 h-16">
     <a href="/" class="font-semibold text-white text-lg md:text-xl">{LOGO_TEXT}</a>
-    <div class="flex gap-6 text-white/80 text-sm">{NAV_LINKS}</div>
+    <div class="hidden md:flex gap-6 text-white/80 text-sm">{NAV_LINKS}</div>
   </div>
 </nav>
 ```
+
+```css
+/* 定位必须显式写死：Tailwind 工具类在 @layer utilities，层叠优先级低于普通 CSS。
+   历史上 .liquid-surface 里的 position: relative 曾把 .fixed 顶掉，导航栏跟页滚走。 */
+.glass-nav {
+  position: fixed;
+  background-color: rgba(255, 255, 255, 0.12);        /* 玻璃底提到上限 12% */
+  backdrop-filter: blur(8px) saturate(160%);          /* 成对出现 */
+  border-bottom: 1px solid rgba(255, 255, 255, 0.15);
+  box-shadow:                                          /* 「光有方向」三件套 */
+    0 8px 32px rgba(3, 7, 18, 0.45),
+    inset 0 1px 0 rgba(255, 255, 255, 0.2),
+    inset 0 -1px 0 rgba(2, 6, 16, 0.35);
+}
+```
+
+- 底边**保持硬边**，不做 mask 渐隐（历史结论：渐隐会让玻璃可见区变短、
+  视觉重心上移，logo 看起来偏低，属"用一个问题换另一个问题"）。
+- 「变实」用叠**深色**遮罩实现（`--nav-scrim` 随滚动 0 → 0.35），
+  不提高白色 alpha（白玻璃被限死在 12%）。
 
 ### Hero 区块
 
@@ -375,20 +504,44 @@ transition-all duration-500 ease-[cubic-bezier(0.16,1,0.3,1)]
   <div class="max-w-4xl mx-auto">
     <h1 class="font-semibold text-white text-4xl md:text-6xl">{HEADLINE}</h1>
     <p class="text-white/80 text-sm md:text-base max-w-xl mt-6">{SUBHEADLINE}</p>
-    <button class="[按钮 token] mt-8 px-6 py-3 text-sm">{CTA_TEXT}</button>
+    <!-- {CTA_TEXT} 是整屏唯一主行动 → 用金色主 CTA token（规范 §3.2） -->
+    <a href="{CTA_LINK}" class="[cta token] inline-block mt-8 px-6 py-3 text-sm">{CTA_TEXT}</a>
   </div>
 </section>
 ```
 
 ### 页脚
 
+**这是 `backdrop-filter` 白名单外的元素 —— 刻意不加模糊。**
+
 ```html
-<footer class="bg-white/8 backdrop-blur-[60px] backdrop-saturate-[180%] border-t border-white/15 py-16 md:py-24 px-6 md:px-8">
+<footer class="glass-footer text-white/80 py-16 md:py-24 px-6 md:px-8 mt-8">
   <div class="max-w-6xl mx-auto grid grid-cols-1 md:grid-cols-3 gap-8">
     <!-- 品牌 / 导航列 / 联系列 -->
   </div>
 </footer>
 ```
+
+```css
+/* 【刻意不加 backdrop-filter】
+   footer 背后只有 body 的平滑渐变，模糊零收益；
+   而 backdrop-saturate(180%) 会在元素边界造成颜色台阶，反而在页脚顶部切出一道可见界线。
+   顶边受光用**两端渐隐**的细高光，而非满宽实线（避免硬边）。 */
+.glass-footer {
+  position: relative;
+  background-color: transparent;
+  background-image: linear-gradient(
+    to bottom,
+    rgba(255, 255, 255, 0) 0px,
+    rgba(255, 255, 255, 0.08) 180px,
+    rgba(255, 255, 255, 0.08) 100%
+  );
+}
+```
+
+> **【2026-10-03 修订】本节页脚示例移除了 `backdrop-blur-[60px] backdrop-saturate-[180%]`。**
+> 代码 `Layout.astro` 的 `.glass-footer` 早已刻意不加模糊，且注释写明了理由。
+> 旧示例属过期残留，会把执行者引向错误做法。**页脚与卡片同理，不在白名单内。**
 
 ---
 
@@ -495,10 +648,17 @@ html[data-glass="full"] .glass-nav {
 
 | 档位 | 触发条件 | 行为 |
 | --- | --- | --- |
-| `full` | 默认（支持 backdrop + SVG filter，无省流/低内存） | 全开 |
-| `lite` | `saveData` 或 `deviceMemory ≤ 4` | 模糊减半（导航 40→16px、遮罩 20→10px），高光强度 0.7 |
+| `full` | 默认（支持 backdrop + SVG filter，无省流/低内存） | 全开。导航栏 `blur(8px) saturate(160%)` |
+| `lite` | `saveData` 或 `deviceMemory ≤ 4` | 降低模糊负担：导航栏 `blur(16px) saturate(140%)`，高光强度 0.7 |
 | `static` | `prefers-reduced-motion: reduce` | **保留材质、只关动效**。`reduce` 管的是"动"，不是"美" |
-| `fallback` | 不支持 `backdrop-filter` 或 SVG filter | 摘掉模糊，退化为半透明白底 + 边框；固定光位 |
+| `fallback` | 不支持 `backdrop-filter` 或 SVG filter | 摘掉模糊（`backdrop-filter: none`），退化为半透明白底 + 边框；固定光位 |
+
+> **【2026-10-03 修订】** 原表写「模糊减半（导航 40→16px、遮罩 20→10px）」——
+> 其中 `40px` 是旧值。代码 `Layout.astro` 现为 `full: blur(8px)` / `lite: blur(16px)`，
+> 已按代码更正。注意此处**不是"减半"**：`full` 档的 8px 是刻意压低的值
+> （导航栏背后是深色正文，模糊过强会让白色文字失去对比），`lite` 反而更大 ——
+> 因为 `lite` 档的意图是**减少滤镜合成负担时仍保持"看得出是玻璃"**，
+> 配合降低的 saturate(140%) 一起减轻 GPU 压力。
 
 **调试开关**：URL 加 `?glass=full|lite|static|fallback` 可强制档位，用于逐档验收。生产环境不带参数时完全不生效。
 
@@ -695,6 +855,10 @@ mask-image: linear-gradient(to bottom, #000 0px, #000 50px, transparent 64px);
 1. **修复按钮 hover 自相矛盾**：`hover:bg-white/15` 违反自家「≥15% 违规」禁令，改为 `hover:bg-white/12`，并在铁律与禁止项中明确「任何临时态都不得超 12%」。
 2. **金色 CTA 落点合规**：静态 `bg-[#E4B863]/12`，仅 hover 到 `/15`，并显式声明为「玻璃无色」铁律的唯一豁免。
 3. **chips 模糊值豁免化**：3.1 原「只允许 40/60px」与 chips 的 30px/160% 冲突，现明确 chips 为超小徽章豁免，但保留「光有方向」。
+   ——（2026-10-03）**该豁免已撤销**。见下方 v1.4 第 2 条：chips 一律不用模糊。
+   当时这条只解决了「数值冲突」，却没质疑「chips 该不该用模糊」这个**更根本的问题** ——
+   而后者才是对的判据。教训：遇到数值冲突，先问「这个属性该不该在这里」，
+   再问「数值取多少」。
 4. **chips 补底暗缘**：原 chips 只有顶高光，违反「光有方向」，已补 `inset_0_-1px_0_rgba(2,6,16,0.3)`。
 5. **修正对比度错误数据**：原「white/50 ≈ 4.6:1」计算有误（实测约 5.3:1，已过 AA），据此把「只能装饰」的理由从「对比度不达标」改为「层级弱化」。
 6. **统一 focus / focus-visible**：明确输入框用 `focus:`（鼠标+键盘），其余控件用 `focus-visible:`（仅键盘）。
@@ -1887,3 +2051,86 @@ glowdiff.mjs（逐像素差分，不靠肉眼也不靠变量）：
   · `track` 白环在胶囊外侧 + 滑块保持"开"状态的纯白高光 ✅
 - `repro.mjs` 8/8 · `followup.mjs` 12/12 ✅ · 构建 9 页 ✅
 
+
+---
+
+## 附：修复记录（续·v1.4 · 文档自相矛盾清算 · 2026-10-03）
+
+> **触发**：「文档矛盾的问题解决一下」。
+> 本轮**不改代码**，只清算规范内部的互相冲突 —— 这些冲突会让执行者
+> 每次开发都要在两条相反的指令间猜，是持续性的伤害源。
+>
+> **判定原则**：冲突时，**以更晚的【铁律】与取证数据为准**，
+> 而不是以"更早写下的 token 示例"为准。因为铁律都是从真实踩坑里提炼的，
+> 而早期的 token 示例往往只是"当时觉得好看"的产物。
+
+### 21.1 hover 位移：`hover:-translate-y-0.5` 全面废除
+
+| 位置 | 原文 | 处置 |
+|---|---|---|
+| §六 交互与动效 | 「Hover：…`hover:-translate-y-0.5` + 边框提升…」 | **删除位移**，改为"边框提升 + 背景提亮 + 内阴影增强" |
+| §3.2 按钮 token | 示例含 `hover:-translate-y-0.5` | **删除** |
+| §12.19【铁律】 | 「卡片/按钮 hover 一律不做位移」 | **保留，为权威** |
+
+- **依据**：§12.19 的取证 —— hover 上浮会与「邻卡后退（缩小）」**同时发生**，
+  一张往上飘、其余往里缩，两种位移方向打架，**空间关系读不出来**。
+- **代码早已合规**：`glass.ts` 的 `cardHover` / `btn` 都没有位移。§六 与 §3.2 是过期文案。
+- **用户原话留档**：「我要求把卡片上移去掉也没去」。
+
+### 21.2 `backdrop-filter`：从「统一要求」改为「白名单制」
+
+**这是本轮最重要的修订。** 旧规范 §3.1 统一要求所有玻璃面板带
+`backdrop-blur-[60px] backdrop-saturate-[180%]`，与铁律 6 / 禁止项直接冲突。
+
+新增 **§3.1.1 白名单**，同时修正全部相关章节：
+
+| 章节 | 原状 | 处置 |
+|---|---|---|
+| §3.1 玻璃面板 | 含 `backdrop-blur-[60px]` | **删除**；新增 §3.1.1 白名单说明 |
+| §3.1 模糊值档位 | 「面板 60px / 小浮层 40px」 | **删除**该档位表（只余导航/浮层一个消费者） |
+| §3.2 按钮 | 含 `backdrop-blur-[40px]` | **删除** |
+| §3.3 输入框 | 含 `backdrop-blur-[40px]` | **删除**；并说明输入框用香槟金柔光的理由 |
+| §3.5 chips | 含 `backdrop-blur-[30px]` + 「豁免」说明 | **删除模糊、撤销豁免** |
+| §八 状态组件 | 示例含 `backdrop-blur-[60px]` | **删除**（上一轮已做） |
+| §十一 导航栏 | `blur-[40px] saturate-[180%]` | **按代码更正为 `blur(8px) saturate(160%)`** |
+| §十一 页脚 | 含 `backdrop-blur-[60px]` | **删除**（代码早已刻意不加） |
+| §十 自检清单 | 三条要求含 `backdrop-blur-*` | **全部改写**为"不含 backdrop-blur" |
+| §九 禁止项 | 只禁 `backdrop-blur-sm` / 裸 `backdrop-blur` | **收紧**为"页面内一律禁止" |
+| §12.5 降级表 | 「模糊减半（导航 40→16px）」 | **按代码更正**为 `full: blur(8px)` / `lite: blur(16px)` |
+
+**白名单（唯一可用 `backdrop-filter` 的两类）**：
+1. **背后会滚过正文的固定导航栏** —— 模糊有真实效果
+2. **覆盖在正文之上的浮层**（灯箱 / Modal / 下拉）
+
+**依据**：2026-08-14 取证 —— 同一条「相邻卡片边缘亮带」缺陷**连续踩坑 6 次**。
+模糊核**会越过元素边界采样**，把相邻卡片 `border-white/15` 的亮边框采进自己的边缘，
+表现为一条宽度 ≈ 模糊半径的**竖直亮带**；而页面内元素背后是纯色 / 平滑渐变底色，
+**模糊本就零效果**。判据：blur 从 60px 缩到 32px 时用户反馈"亮条变细"，
+**彻底移除后消失**。→ **零收益、全副作用。**
+
+### 21.3 香槟金：从「三个用途词」改为「八类允许清单」
+
+§2 只写「主 CTA、关键数字、高亮文字」，**没有边界**。
+实测中「hover 变色」「正文链接」「金色边 chip」等 13 处无法判断是否违规。
+
+新增 **§2.1 允许清单**（八类穷举），并同步 §十 自检清单。
+
+- **判据是"形状"而非"面积"**：非 CTA 用法一律是 **1px 线条** 或 **单字变色**，
+  永不构成色块。
+- **明确允许 hover 变色**：它是"高亮文字"在交互态的自然延伸；
+  但**静态链接文字不得是金色**（否则全站发黄、金色贬值）。
+- 全站 17 处金色引用逐条核对，**全部落在清单内，无越界**。
+
+### 21.4 附带修正的历史记录
+
+- **v1.1 第 3 条**（chips 模糊值豁免化）追加撤销说明，并提炼教训：
+  > 遇到**数值冲突**，先问「这个属性该不该在这里」，再问「数值取多少」。
+  > 当年这条只解决了前者（数值），放过了后者（该不该），于是把缺陷保留了一整个版本。
+
+### 本轮新增工具
+
+| 工具 | 用途 |
+|---|---|
+| `.workbuddy/tools/speccheck.mjs` | **规范 ↔ 代码 双向校验**。方向 A（代码→规范）：页面内无模糊、无 hover 位移、透明度未越界；方向 B（规范→代码）：token 是否有实现、状态组件是否齐备、空态是否接入。**内置注释过滤**（本项目注释大量引用"曾经的错误写法"，不排除会大量误报）。 |
+
+**校验结果**：9 通过 / 0 失败（17 处金色为人工核对提示，已逐条确认合规）。
