@@ -477,10 +477,30 @@ if (tier === "full" || tier === "lite") {
       //   而 --lite 是**离散 0/1**，CSS 侧的 500ms opacity 过渡跟不上逐帧翻转
       //   → 直观就是"在闪"。给熄灭留一段死区后，边界抖动不再能翻转状态。
       //   取值 6px：小于 tagChip 间距 gap-2=8px 的一半，不会造成粘连。
+      //
+      // 【2026-10-03 第八轮修：滞后把"离开视口"也一起吞掉了】
+      //   现象（用户截图）：鼠标停在页面中部，**导航栏却一直亮着**。
+      //   根因：leaveViewport() 用 `(-1,-1)` 当"已离开"的哨兵值，但对
+      //   **贴着屏幕左上角**的元素（导航栏 top=0 / left=0）：
+      //       s.tx = (-1 - 0) / 1280 = -0.08%
+      //       s.ty = (-1 - 0) /   65 = -1.54%
+      //   而滞后容差 rx = 8/1280 = 0.62%、ry = 8/65 = 12.3%
+      //       → -0.08% >= -0.62% ✅   且   -1.54% >= -12.3% ✅
+      //   → stillNear = true → 判定仍算"在里面" → **--lite 永远是 1，高光卡死**。
+      //   本质：用 (-1,-1) 表示"离开"**暗含了方向假设** —— 它只是
+      //   "左上角外 1px"，对任何贴近左上角的元素都仍算"附近"。
+      //
+      //   两处一起修（缺一不可）：
+      //     ① leaveViewport 的哨兵改为**远在视口外**（-1 太小，改成 -9999），
+      //        使归一化坐标变成大负数，任何元素的容差都不可能包含它；
+      //     ② stillNear 增加 `pointerInViewport` 前置条件 —— 指针根本不在
+      //        视口里时，滞后逻辑**不适用**（滞后是为了压抖动，不是为了
+      //        让已经离开的手指保持点亮）。
       const rx = (LIT_EDGE_PX + LIT_RELEASE_PX) / (r.width || 1);
       const ry = (LIT_EDGE_PX + LIT_RELEASE_PX) / (r.height || 1);
       const litOn = pressed && litNow;
       const stillNear =
+        pointerInViewport &&
         s.tx >= -rx && s.tx <= 1 + rx && s.ty >= -ry && s.ty <= 1 + ry;
       const litValue = litOn || (s.lit && pressed && stillNear);
       if (litValue !== s.lit) {
@@ -599,12 +619,21 @@ if (tier === "full" || tier === "lite") {
   //   并主动排一帧让判定真正跑一遍。
   //   实测教训：只 delete dataset 而不排帧，状态会立刻被下一帧恢复
   //   （leaveTest 首轮：afterLeave 仍为 "inside"）。
+  //
+  // 【2026-10-03 第八轮修：哨兵值不能是 (-1,-1)】
+  //   原先用 -1 表示"离开"，但对**贴着屏幕左上角**的元素（导航栏
+  //   top=0 / left=0），(-1,-1) 归一化后只有 (-0.08%, -1.54%)，
+  //   仍落在滞后容差（rx 0.62% / ry 12.3%）之内 → stillNear 为真 →
+  //   **高光卡死**（用户实测：鼠标在页面中部，导航栏一直亮）。
+  //   改用 -9999：任何元素的归一化坐标都会变成绝对值远超容差的大负数。
+  //   配合 tick 里 stillNear 增加 pointerInViewport 前置条件，双保险。
+  const OFFSCREEN = -9999;
   const leaveViewport = () => {
-    clientX = -1;
-    clientY = -1;
+    clientX = OFFSCREEN;
+    clientY = OFFSCREEN;
     pressed = hasHover; // 桌面端保持活跃标志，退出视口靠坐标兜底
-    // 用 snapCoords 而不是只置脏标志：它会把 -1 立刻换算成"远在元素外"
-    // 的归一化坐标（s.tx/s.ty 变成大负数），判定随之正确关掉高光。
+    // 用 snapCoords 而不是只置脏标志：它会把哨兵坐标立刻换算成
+    // "远在元素外"的归一化坐标，判定随之正确关掉高光。
     snapCoords();
     clearFocus();
     wake();
