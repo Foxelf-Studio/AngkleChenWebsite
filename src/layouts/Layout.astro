@@ -427,6 +427,9 @@ const github = site.github || "";
         outline: 2px solid rgba(255, 255, 255, 0.85);
         outline-offset: 4px;
         box-shadow: 0 0 0 5px rgba(255, 255, 255, 0.12);
+        /* 焦点环不做过渡：轨道自带 box-shadow 过渡（开关切换用），
+           若不摘掉，聚焦时环会"边长大边跳"，与全局规则同因（见 global.css）。*/
+        transition: none;
       }
 
       /* ---- 底栏：柔化顶边 ----

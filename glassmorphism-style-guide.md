@@ -97,6 +97,7 @@ transition-all duration-500 ease-[cubic-bezier(0.16,1,0.3,1)]
   outline: 2px solid rgba(255, 255, 255, 0.85);  /* 白环 */
   outline-offset: 4px;                            /* 向外偏移，与元素留出暗缝 */
   box-shadow: 0 0 0 5px rgba(255, 255, 255, 0.12); /* 外圈柔光（纯附加） */
+  transition: none;                                /* ← 焦点环永不参与过渡！ */
 }
 ```
 
@@ -113,6 +114,19 @@ transition-all duration-500 ease-[cubic-bezier(0.16,1,0.3,1)]
   与卡片的 `border border-white/15` 糊成一条线 → 读起来像"卡片自己变亮了"，
   没有"外框套住元素"的层次感。用户要求对齐 Edge 默认观感（环在元素外，留暗缝）。
 
+**为什么焦点环绝不参与过渡**（2026-10-03 三次修订，重要）：
+- 用户实测：Tab 切到「下载」按钮，动画播完**一帧跳变、环变大了一点**。
+- 逐帧采样（`ringjump.mjs`）证据：`outlineWidth 3px→2px`（一步跳，无插值）、
+  `outlineOffset 1px→2px→3px`（只能整数跳）、而柔光 `boxShadow 0.79→4.99px`
+  **平滑**长大。两者不同步 → 视觉上"环先小、然后啪地变大"。
+- 根因：本站玻璃元素统一带 `transition-all duration-500`（卡片/按钮/chips 的
+  hover 过渡），它把 `outline-width` / `outline-offset` 也纳入了过渡；
+  但 **Chromium 对 `outline` 子属性不做连续插值**，只在整数值间跳。
+- 修法：在 `:focus-visible` 上加 **`transition: none`**，把整条过渡短接到无。
+  ⚠️ 不能用 `transition-property: outline`（只改列表，`duration-500` 仍在，仍会过渡）。
+- 认知：**原生焦点环本来就是瞬时出现的**。键盘用户只需要"立刻知道焦点在哪"，
+  动画化只会带来不同步与迟滞 —— 焦点环是**状态指示**，不是装饰动效。
+
 **实现铁律（踩坑记录）**：
 1. **用 `outline` + `outline-offset`，不要用 `box-shadow` 画环**：
    - `outline-offset` 能向外留出暗缝，形成"元素 → 缝隙 → 白环"的分明结构；
@@ -121,16 +135,19 @@ transition-all duration-500 ease-[cubic-bezier(0.16,1,0.3,1)]
 2. **不要写 `border-radius: inherit`**（第一版踩的坑）：那会用**父元素**的圆角
    覆盖元素自身的 `rounded-3xl` → 实测 `borderRadius: 0px`，卡片变直角、
    白环也跟着变方。焦点环**不需要**动 `border-radius`，元素自己的圆角就够了。
-3. **`outline` 与 `box-shadow` 是两套独立属性，互不覆盖**：因此不必再抄元素原有
+3. **`transition: none` 必须显式写**（三次修订的坑）：否则会被元素的
+   `transition-all` 卷进去，导致 `outline` 离散跳变、与柔光不同步。
+4. **`outline` 与 `box-shadow` 是两套独立属性，互不覆盖**：因此不必再抄元素原有
    外阴影 —— 聚焦时 `0 16px 40px` 等阴影**结构不变**，天然满足铁律 2。
    外圈的柔光用一层 box-shadow 补充，但它是**纯附加光晕**，不承载原有阴影。
-4. **落全局、不要落 `glass.ts` 常量**：常量方案要求每处手动套用，历史上
+5. **落全局、不要落 `glass.ts` 常量**：常量方案要求每处手动套用，历史上
    「逐个页面手动加」必然漏（见 §12.1.1 的同款教训）。全局 `:focus-visible`
    让**任何新加的交互元素自动获得**焦点环。
-5. **只作用于 `:focus-visible`**：鼠标点击不亮环。否则"朴实的观感"会变成
+6. **只作用于 `:focus-visible`**：鼠标点击不亮环。否则"朴实的观感"会变成
    满页闪白框。
-6. **`sr-only` 控件（如开关的 checkbox）要先摘掉白环**：视觉焦点环应画在
-   它的可见载体（轨道）上；否则隐藏盒会漏出细边。
+7. **`sr-only` 控件（如开关的 checkbox）要先摘掉白环**：视觉焦点环应画在
+   它的可见载体（轨道）上；否则隐藏盒会漏出细边。载体自带过渡的，也要补
+   `transition: none`。
 
 ### 3.5 标签徽章（chips）
 
@@ -1758,7 +1775,7 @@ glowdiff.mjs（逐像素差分，不靠肉眼也不靠变量）：
 
 ## 附：修复记录（续）
 
-### 12.38 【铁律】焦点环：白色 · 画在元素外侧 · 用 outline 不用 box-shadow · 落全局
+### 12.38 【铁律】焦点环：白色 · 元素外侧 · outline 画环 · 不参与过渡 · 落全局
 
 **背景**（2026-10-03）：审计发现全站交互元素的键盘焦点态**没有任何自定义样式**，
 完全依赖浏览器默认 `outline: auto`。其后果是：
@@ -1790,15 +1807,22 @@ glowdiff.mjs（逐像素差分，不靠肉眼也不靠变量）：
    不承载原有阴影，所以绝不会"掉阴影"。
 4. **落全局 `:focus-visible`，不要落 `glass.ts` 常量**。「逐个套用」必然漏
    （§12.1.1 已有同款教训）；全局规则让新增交互元素自动获得。
-5. 只作用于 `:focus-visible`（鼠标点击不亮环），且 `sr-only` 控件要单独摘掉
-   白环、把环画在它的可见载体上（如开关的轨道）。
+5. **焦点环必须 `transition: none`**（第三轮修订，见 §3.4）：
+   玻璃元素统一带 `transition-all duration-500`，会把 `outline-width` /
+   `outline-offset` 卷进过渡；而 Chromium 对 `outline` 不做连续插值
+   （只在整数间跳），与平滑长大的柔光不同步 → 一帧跳变。加 `transition: none`
+   即可（不能用 `transition-property: outline`，那样 duration 仍在）。
+6. 只作用于 `:focus-visible`（鼠标点击不亮环），且 `sr-only` 控件要单独摘掉
+   白环、把环画在它的可见载体上（如开关的轨道，其载体的过渡也要补 `none`）。
 
-**验证**（`focusring2.mjs`，逐像素扫边界，从外向内）：
-- 卡片：`x-6/-5 lum≈220`（白环 2px）→ `x-4~-1 lum≈48`（暗缝 4px）
+**验证**（`focusring2.mjs` 逐像素扫边界 · `ringjump.mjs` 逐帧采样式）：
+- 卡片（focusring2）：`x-6/-5 lum≈220`（白环 2px）→ `x-4~-1 lum≈48`（暗缝 4px）
   → `x+0 lum=70`（卡片边框）—— 「暗缝 + 白环」结构分明 ✅
+- 按钮跳变（ringjump，修复后）：聚焦后 `(outlineWidth|offset)` 只出现 1 种组合
+  `2px|4px`，全帧恒定 —— **无跳变** ✅（修复前是 `3→2px` 宽度跳 + `1→2→3px` offset 分步跳）
 - computed：`border-radius: 24px`（未被 inherit 破坏）· `outline: 2px solid
   rgba(255,255,255,.85)` · `outline-offset: 4px` ✅
 - 开关（真实 Tab 路径）：`input` outline/shadow 皆 none（隐藏盒不漏）
   · `track` 白环在胶囊外侧 + 滑块保持"开"状态的纯白高光 ✅
-- `followup.mjs` 12/12 ✅ · 构建 9 页 ✅
+- `repro.mjs` 8/8 · `followup.mjs` 12/12 ✅ · 构建 9 页 ✅
 
