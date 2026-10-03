@@ -142,10 +142,82 @@ if (tier === "full" || tier === "lite") {
     inView: boolean; // 是否在视口内 —— 不在视口就跳过，省算力
     isPane: boolean; // 是否为「面」—— 只有面参与邻卡后退（缩小）。
                      // 按钮/标签是"件"，只跟手高光，永不后退。
+    lit: boolean;    // 上一帧的高光点亮状态 —— 供滞后判定用（见 LIT_RELEASE_PX）
   }
 
   const surfaces: Surface[] = [];
   let rectsDirty = true;
+  // ------------------------------------------------------------
+  // 【2026-10-03 第五～九轮：滑动时高光"闪"—— 五个来回的取证与最终解】
+  // ------------------------------------------------------------
+  // 现象（用户录屏 Screenrecording_20261003_100458.mp4）：手指匀速拖动页面时，
+  //   卡片上的高光在纵向**反复上下跳约 14px**，观感就是"光在闪烁"。
+  //
+  // 【第五轮：先排除合成触摸环境与录屏污染】
+  //   · flicker.mjs：`--lite` 稳定翻转 2 次、无中途熄灭 → 排除"亮灭闪"。
+  //   · autocrop.mjs：证实固定采样区会随滚动**切进浏览器地址栏**
+  //     （底边在 1009~1153 之间游走）—— 这是本轮踩的**测量陷阱第 5 次**。
+  //     改用 vidspec2.mjs 逐帧自适应裁切后，最大跳变 8.19、方向反转仅 1 次。
+  //
+  // 【第六轮：把 rect↔坐标的跨帧混用钉死】
+  //   rectlag.mjs 逐帧同时记录 touchY / 实时 rect / 已写入的 --my：
+  //     80  touchY=537  rect.top=263.25  --my=96.48%  实时反算=91.8 ← 不符
+  //     81  touchY=537  rect.top=263.25  --my=91.79%  实时反算=91.8
+  //     83  touchY=537  rect.top=249.25  --my=91.79%  实时反算=96.5 ← 不符
+  //     84  touchY=537  rect.top=249.25  --my=96.48%  实时反算=96.5
+  //   同帧 `docTop = rect.top + scrollY` 恒为 542.25（极差 0.00px）——
+  //   DOM 读数是**一致快照**，错的是**用了哪一帧的 rect**。
+  //   → 根因：tick() 用「本帧坐标 + 上一帧 rect」。
+  //     误差 = Δscroll / h = 14 / 298.25 = 4.7%，与实测 96.48% ↔ 91.79% 吻合。
+  //   → 为什么以前没暴露：EASE=0.12 把这 4.7% 阶跃摊成 0.56%/帧，看不见；
+  //     EASE_TOUCH=1（完全跟手）后误差被**原样搬上屏幕**。
+  //     即：这是"完全跟手"放大暴露的**既有 bug**，不是新引入的。
+  //   → 第一层修：coordsDirty 标志 + tick 开头强制同帧重测 rect。
+  //     抖动从"每帧"降到"偶发"（约每 20 帧一次）。**不够**。
+  //
+  // 【第七轮：定位到"滚动已应用、touchmove 未派发"的窗口】
+  //   evorder.mjs 带时间戳的帧时间线：
+  //     raf    4464.8  rect.top=277.25  scrollY=265  --my=91.79%
+  //     scroll 4465.8                   scrollY=279   ← 滚动先到
+  //     raf    4465.9  rect.top=263.25  scrollY=279  --my=91.79% ← 没跟上
+  //     raf    4491.6  rect.top=263.25  scrollY=279  --my=96.48% ← 26ms 后才纠正
+  //   → 浏览器一帧内的顺序是
+  //       [合成器应用滚动] → [派发 scroll/rAF] → [派发 input 事件]
+  //     rAF 正好跑在"滚动已应用、新坐标还没到"的窗口里（29 次 vs 67 次）。
+  //
+  // 【第八轮：补偿公式被证伪】
+  //   试过 `py = clientY - (window.scrollY - coordScrollY)`：
+  //   反向跳变从约 19 次/秒降到 0，但残留 87.09% ↔ 91.79% 偶发跳变。
+  //   scrollread.mjs 在 touchmove 处理器里同时记录 `window.scrollY` 与
+  //   **下一帧 rAF 里的 scrollY**：
+  //       delta = 0  （处理器里已是新值）: 8 次
+  //       delta = 14 （处理器里还是旧值）: 16 次
+  //   → `window.scrollY` 在事件处理器里读到的是新是旧**本身不确定**，
+  //     任何"时间差补偿"必然约 1/3 次数补错。**补偿这条路走不通。**
+  //
+  // 【第九轮（最终解）：采集坐标的那一刻就锚定】
+  //   不再做任何时间差补偿 —— 在事件处理器里**紧挨着**读 clientX/clientY
+  //   和 rect，两者天然同一时刻；当场算出元素相对归一化坐标存进
+  //   s.tx / s.ty。之后无论页面怎么滚、tick 何时跑，都不再漂。
+  //   → `snapCoords()` 就是这件事。tick 只负责缓动 + 写 CSS，不再碰 rect。
+  //   → 判定（lit / pane）也一并改成**归一化坐标比较**：
+  //     rect 与 s.tx/s.ty 是同一组值，拿屏幕坐标 px/py 去比 r.left/r.top
+  //     等于把"差一个滚动量"的错误在判定上重演一遍。
+  //     像素容差按元素尺寸换算成归一化容差（ex/ey），
+  //     四个方向的**物理**容忍度仍然一致。
+  //   → 代价：处理器里多几次 getBoundingClientRect（全站 .liquid-surface
+  //     最多 10 个），且是**连续的批量读**（中间无写），不构成 layout
+  //     thrashing；事件本身每帧至多一两次，量级完全可接受。
+  //     换来的是**彻底确定**的高光位置 —— 这比省几次读重要得多。
+  //
+  // 【顺带修掉一个隐患】旧写法 rectsDirty 只在 scroll/resize 置位，
+  //   一旦滚动结束而 rect 恰好差一帧，高光位置会**永久偏一点**，
+  //   直到下一次滚动才纠正。改为"采集即锚定"后这个残留也消失了。
+  //
+  // 【为什么滚动帧不必重锚】手指没动、页面在滚时，手指在**文档坐标**里
+  //   本就没动 → 相对元素的归一化坐标 s.tx/s.ty 本就不该变，
+  //   光应当**跟着内容一起走**（这正是物理上正确的表现）。
+  //   所以 scroll 处理器只置 rectsDirty（供 inView 判定），不动坐标。
 
   function collect() {
     surfaces.length = 0;
@@ -165,16 +237,21 @@ if (tier === "full" || tier === "lite") {
         // （/about 的信息卡、文章正文页这类独占容器）。
         isPane:
           el.classList.contains(PANE_CLASS) && !el.classList.contains(PANE_OFF_CLASS),
+        lit: false,
       });
     });
     rectsDirty = true;
   }
 
+  // 只更新"是否在视口内"的廉价标记 + 缓存 rect（供无坐标时的初始/兜底使用）。
+  // 【注意】真正的"坐标↔rect 同帧"由 snapCoords() 保证；
+  //   这里刷新 rect 只是为了 inView 判定与初次落位，不参与位移计算。
   function refreshRects() {
     const vh = window.innerHeight;
     for (const s of surfaces) {
+      // 一次连续的批量读取（本循环内无任何写），不会触发逐元素的强制同步布局
       s.rect = s.el.getBoundingClientRect();
-      // 视口外（含上下各留一屏缓冲）直接不参与，省掉无效计算
+      // 视口外（含上下各一屏缓冲）直接不参与，省掉无效计算
       s.inView = s.rect.bottom > -vh && s.rect.top < vh * 2;
     }
     rectsDirty = false;
@@ -183,6 +260,42 @@ if (tier === "full" || tier === "lite") {
   // 全局指针位置（客户端坐标，像素）—— 唯一的指针状态
   let clientX = window.innerWidth * 0.78;
   let clientY = window.innerHeight * 0.08;
+
+  // ------------------------------------------------------------
+  // 【2026-10-03 第九轮（最终解）：采集坐标的那一刻就锚定】
+  // ------------------------------------------------------------
+  // 五轮取证的完整链条见上方「第五～九轮」长注释（rectlag / evorder /
+  // scrollread 三份证据）。结论一句话：
+  //   **不要在 tick 里做任何"时间差补偿"** —— 处理器里读到的
+  //   `window.scrollY` 是新是旧本身不确定（scrollread.mjs：delta=0 出现
+  //   8 次 / delta=14 出现 16 次），补偿必然约 1/3 次数补错。
+  //
+  // 正解：在事件处理器里**紧挨着**读 clientX/clientY 与 rect，
+  //   两者天然同一时刻 → 当场算出元素相对归一化坐标，存进 s.tx / s.ty。
+  //   之后无论页面怎么滚、tick 何时跑，都不再漂。
+  //
+  //   注意：这里读到的是 **rect 与坐标同刻** 的一对值。滚动发生在采集
+  //   **之后**时，s.tx/s.ty 保持不变 —— 这是对的：手指在文档坐标里没动，
+  //   光就应该跟着内容一起走，而不是在屏幕上原地不动。
+  //
+  //   tick() 之后只负责缓动 + 写 CSS，不再碰 rect（否则会把 rect 更新到
+  //   新的滚动位置，反而与已锚定的 s.tx/s.ty 脱钩）。
+  //
+  //   代价：处理器里多几次 getBoundingClientRect（全站 .liquid-surface
+  //   最多 10 个），且是**连续的批量读**（中间无写），不构成 layout
+  //   thrashing；事件本身每帧至多一两次，量级完全可接受。
+  //   换来的是**彻底确定**的高光位置 —— 这比省几次读重要得多。
+  function snapCoords() {
+    for (const s of surfaces) {
+      // 每次都重量：元素可能刚进入视口 / 刚被创建
+      s.rect = s.el.getBoundingClientRect();
+      const w = s.rect.width || 1;
+      const h = s.rect.height || 1;
+      s.tx = (clientX - s.rect.left) / w;
+      s.ty = (clientY - s.rect.top) / h;
+    }
+    rectsDirty = false;
+  }
 
   // 是否有真正的 hover 能力。触屏没有 hover，改用「按住」作为活跃条件。
   const hasHover = window.matchMedia("(hover: hover) and (pointer: fine)").matches;
@@ -255,6 +368,9 @@ if (tier === "full" || tier === "lite") {
   //   的间距可以是 gap-2 = 8px。2px 外扩在 8px 间距下仍有 4px 中性地带，
   //   不会出现"两个相邻标签同时点亮"的粘连。
   const LIT_EDGE_PX = 2;
+  // 熄灭滞后：已经点亮后，要再多离开这么多像素才熄灭。
+  // 见 --lite 写入处的注释 —— 用来压掉"边界抖动导致高光闪"。
+  const LIT_RELEASE_PX = 6;
 
   // 邻卡后退的开关状态（写进 <html data-focus>，避免每帧重复赋值）
   let focusInside = false;
@@ -263,29 +379,47 @@ if (tier === "full" || tier === "lite") {
     raf = 0;
     // 用户关掉开关后立刻停止运算（事件里已 cancel，这里是双保险）
     if (!liquidEnabled) return;
+    // 【2026-10-03 第九轮：tick 不再量 rect，只负责缓动与写 CSS】
+    //   坐标已在**采集的那一刻**由 snapCoords() 换算成元素相对坐标
+    //   （s.tx / s.ty），与 rect 天然同帧。这里重测只会**破坏**它 ——
+    //   因为重测会把 rect 更新到"当前滚动位置"，而 s.tx/s.ty 是按
+    //   采集时的 rect 算的，覆盖 rect 后就与 s.tx/s.ty 不再对应。
+    //   所以这里只在"既没有坐标、rect 也脏"时才刷新一次
+    //   （首次落位 / collect() 之后）。滚动帧只置 rectsDirty，
+    //   而 s.tx/s.ty 已锚定 —— 不需要（也不应该）重测。
     if (rectsDirty) refreshRects();
 
     let moving = false;
     // 本轮是否有任意元素判定为"指针在其内部"
     let anyInside = false;
 
+    // 【2026-10-03 第九轮】彻底删掉 scrollDy 补偿。
+    //   第六轮曾在 tick 里用 `clientY - (scrollY_now - coordScrollY)` 把坐标
+    //   补到当前滚动位置，反向跳变从约 19 次/秒降到 0；但 scrollread.mjs
+    //   证明 `window.scrollY` 在事件处理器里读到的**是新是旧本身不确定**
+    //   （delta=0 出现 8 次 / delta=14 出现 16 次）→ 约 1/3 的次数补错，
+    //   留下 87.09% ↔ 91.79% 的偶发跳变。
+    //   现在改为"采集时即锚定"（见 snapCoords），补偿这一层已无必要，
+    //   且留着反而会**二次平移**已经锚定好的坐标 → 必须删除。
+    //
+    //   clientX/clientY 本身仍要用：视口内外判定（pointerInViewport）
+    //   是**屏幕空间**语义，绝不能补偿 —— 补偿过就判错"指针还在不在屏幕上"。
+    //   另外它们还是 snapCoords() 的输入（处理器里那次换算的原料）。
+    const px = clientX;
+    const py = clientY;
+
     // 几何兜底：指针落在视口之外时，物理上不可能在任何元素内。
     // 这一条与上面的 mouseleave/blur 互为保险 —— 事件可能因为
     // 合成事件、iframe、或浏览器差异而漏掉，但坐标永远不会骗人。
     const pointerInViewport =
-      clientX >= 0 && clientX <= window.innerWidth &&
-      clientY >= 0 && clientY <= window.innerHeight;
+      px >= 0 && px <= window.innerWidth &&
+      py >= 0 && py <= window.innerHeight;
 
     for (const s of surfaces) {
       if (!s.inView) continue;
 
+      // rect / tx / ty 都由 snapCoords() 在同一时刻写定 —— 这里只读。
       const r = s.rect;
-      const w = r.width || 1;
-      const h = r.height || 1;
-
-      // 指针相对该元素左上角的归一化坐标（允许 <0 / >1，表示在元素外）
-      s.tx = (clientX - r.left) / w;
-      s.ty = (clientY - r.top) / h;
 
       // 缓动收敛
       const dx = s.tx - s.px;
@@ -304,12 +438,28 @@ if (tier === "full" || tier === "lite") {
       style.setProperty("--my", `${(s.py * 100).toFixed(2)}%`);
 
       // ---- 内外判定（两个用途，两套容差）----
-      // 高光（lit）：允许 2px 外扩 —— "贴到边缘就亮"，不必精确压线
+      // 【2026-10-03 第七轮：改用归一化坐标判定，不再拿屏幕坐标去比 rect】
+      //   原因：rect 与 s.tx/s.ty 是**采集那一刻**的同一组值；而 px/py 是
+      //   "当前"的屏幕坐标。滚动后两者已不在同一坐标系 ——
+      //   拿 px/py 去比 r.left/r.top 就是第六轮那个"差一个滚动量"的错误，
+      //   只是在判定上重演一遍（表现为滚动时高光"进来了又突然灭掉"）。
+      //   归一化坐标天然免疫：s.tx 就是"指针相对这个元素"的比例，
+      //   无论页面滚到哪，它表达的都是同一个物理关系。
+      //
+      //   像素容差换算成归一化容差：
+      //     水平 ex = LIT_EDGE_PX / 元素宽   竖直 ey = LIT_EDGE_PX / 元素高
+      //   这样四个方向的**物理**容忍度仍然是一致的（这正是量纲修正的本意）。
+      const ex = LIT_EDGE_PX / (r.width || 1);
+      const ey = LIT_EDGE_PX / (r.height || 1);
+
+      // 高光（lit）：允许 2px 外扩 —— "贴到边缘就亮"，不必精确压线。
+      //   与 --mx/--my 用的是**同一个点**（s.tx/s.ty），
+      //   不会出现"高光已经画在卡片里、判定还说在外面"。
       const litNow =
-        clientX >= r.left - LIT_EDGE_PX &&
-        clientX <= r.right + LIT_EDGE_PX &&
-        clientY >= r.top - LIT_EDGE_PX &&
-        clientY <= r.bottom + LIT_EDGE_PX &&
+        s.tx >= -ex &&
+        s.tx <= 1 + ex &&
+        s.ty >= -ey &&
+        s.ty <= 1 + ey &&
         r.width > 1 &&
         r.height > 1; // 尺寸为 0 的隐藏元素永远不算"内部"
 
@@ -317,13 +467,26 @@ if (tier === "full" || tier === "lite") {
       // 只有 .liquid-pane（卡片/面板）参与，按钮标签不参与。
       // 注意是 s.isPane（登记时算好），不是裸 isPane —— 后者不存在，
       // 会在第一个元素上抛 ReferenceError，导致本行之后的 --lite 永不写入。
-      const paneNow =
-        s.isPane && clientX >= r.left && clientX <= r.right && clientY >= r.top && clientY <= r.bottom;
+      const paneNow = s.isPane && s.tx >= 0 && s.tx <= 1 && s.ty >= 0 && s.ty <= 1;
 
       // 指针在元素内 **且处于活跃状态** → 高光可见；否则淡出，避免"隔空点亮"。
       // 触屏上 pressed 只在按下期间为 true，抬手后高光按 CSS 过渡淡出 ——
       // 这就是触屏的「点击反馈」。
-      style.setProperty("--lite", pressed && litNow ? "1" : "0");
+      // 【滞后（hysteresis）】点亮用 2px 外扩、**熄灭要求再多离开 6px**。
+      //   指针恰好压在某条边界上时，判定可能在 1/0 之间逐帧翻转（"啪"地亮灭）；
+      //   而 --lite 是**离散 0/1**，CSS 侧的 500ms opacity 过渡跟不上逐帧翻转
+      //   → 直观就是"在闪"。给熄灭留一段死区后，边界抖动不再能翻转状态。
+      //   取值 6px：小于 tagChip 间距 gap-2=8px 的一半，不会造成粘连。
+      const rx = (LIT_EDGE_PX + LIT_RELEASE_PX) / (r.width || 1);
+      const ry = (LIT_EDGE_PX + LIT_RELEASE_PX) / (r.height || 1);
+      const litOn = pressed && litNow;
+      const stillNear =
+        s.tx >= -rx && s.tx <= 1 + rx && s.ty >= -ry && s.ty <= 1 + ry;
+      const litValue = litOn || (s.lit && pressed && stillNear);
+      if (litValue !== s.lit) {
+        s.lit = litValue;
+        style.setProperty("--lite", litValue ? "1" : "0");
+      }
       if (paneNow && pointerInViewport) anyInside = true;
     }
 
@@ -360,6 +523,9 @@ if (tier === "full" || tier === "lite") {
     if (e.pointerType === "touch") return;
     clientX = e.clientX;
     clientY = e.clientY;
+    // 【关键】就在这一刻把坐标换算成元素相对坐标 —— 与上面两行同帧同刻。
+    //   之后无论页面怎么滚、tick 何时跑，s.tx/s.ty 都不再漂。
+    snapCoords();
     wake();
   };
 
@@ -398,6 +564,8 @@ if (tier === "full" || tier === "lite") {
     if (!t) return;
     clientX = t.clientX;
     clientY = t.clientY;
+    // 同 onPointerMove：采集的那一刻就锚定成元素相对坐标
+    snapCoords();
     wake();
   };
 
@@ -435,6 +603,9 @@ if (tier === "full" || tier === "lite") {
     clientX = -1;
     clientY = -1;
     pressed = hasHover; // 桌面端保持活跃标志，退出视口靠坐标兜底
+    // 用 snapCoords 而不是只置脏标志：它会把 -1 立刻换算成"远在元素外"
+    // 的归一化坐标（s.tx/s.ty 变成大负数），判定随之正确关掉高光。
+    snapCoords();
     clearFocus();
     wake();
   };
@@ -450,7 +621,7 @@ if (tier === "full" || tier === "lite") {
   const endTouch = () => {
     if (hasHover) return; // 桌面端不碰（触屏事件在混合设备上可能误报）
     pressed = false;
-    clearFocus();
+    // 坐标没变，但 pressed 变了 → 高光要淡出；排帧即可（无需重锚坐标）
     wake();
   };
   window.addEventListener("touchend", endTouch, { passive: true });
@@ -506,6 +677,8 @@ if (tier === "full" || tier === "lite") {
       pressed = true;
       clientX = e.clientX;
       clientY = e.clientY;
+      // 按下这一刻就锚定（此时页面尚未滚动，仍与 rect 严格同帧）
+      snapCoords();
       // 【刻意不做 setPointerCapture】
       //   捕获虽能保证 pointermove 持续送达，但会把这次触摸从"滚动手势"里
       //   摘出来 → 页面滚不动。用户要的是"高光跟着动、同时页面也正常动"。
@@ -548,8 +721,11 @@ if (tier === "full" || tier === "lite") {
     window.addEventListener("pointermove", onPointerMove, { passive: true });
   }
 
-  // 滚动 / 尺寸变化 → rect 失效。滚动过程本身不重测（等下一次 rAF 统一测），
-  // 用 passive 监听，绝不阻塞滚动。
+  // 滚动 / 尺寸变化 → rect 失效。用 passive 监听，绝不阻塞滚动。
+  // 【2026-10-03 第九轮】这里只置 rectsDirty（供 inView 判定），**不动坐标**：
+  //   s.tx/s.ty 已在采集那一刻锚定，与"当前 rect"无关。
+  //   滚动期间也不需要重锚 —— 手指没动时 s.tx/s.ty 本就不该变
+  //   （手指在文档坐标里没动，光应当随内容一起走）。
   window.addEventListener("scroll", () => { rectsDirty = true; wake(); }, { passive: true });
   window.addEventListener("resize", () => { rectsDirty = true; wake(); }, { passive: true });
 
