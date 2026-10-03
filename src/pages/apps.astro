@@ -58,11 +58,14 @@ const appsIntro =
                         下载
                       </a>
                     ) : (
-                      /* 禁用态：此前用 text-white/35，在深色底上对比度约 2.6:1，
-                         远低于 WCAG AA 正文要求的 4.5:1，读起来吃力。
-                         提到 /50 后约 3.9:1；再配合 dashed 边框把它明确表达为
-                         「尚未上架」而非「坏了」，语义也更清楚。 */
-                      <span class="inline-block px-5 py-2 text-xs text-white/50 border border-dashed border-white/15 rounded-2xl cursor-not-allowed">
+                      /* 禁用态「敬请期待」：text-white/35（实测 3.16:1）+ 实线边框。
+                         这个值曾一度被提到 /50（5.03:1，过 AA），但用户看对比图后
+                         决定改回 —— 理由更有说服力：**禁用态的职责是"退让"**。
+                         提到 /50 后亮度接近旁边的「下载」按钮（本身就是低调的无色玻璃），
+                         主次关系反而模糊了。视觉退让的价值 > 这个数字上的达标。
+                         WCAG 1.4.3 对 inactive UI components 本就有豁免，不构成违规。
+                         对比图见 git 历史 / commits（临时页 src/pages/contrast-lab 已删）。 */
+                      <span class="inline-block px-5 py-2 text-xs text-white/35 border border-white/10 rounded-2xl cursor-not-allowed">
                         敬请期待
                       </span>
                     )}
