@@ -1,0 +1,37 @@
+---
+/**
+ * 404 页 —— 规范 §八（错误态）
+ *
+ * 【为什么必须自建】
+ *   Astro 默认 404 是框架生成的**纯白页**，与全站深色玻璃语言完全断裂：
+ *   用户在站内点到失效链接（旧文章被删、外部引用、手输地址），
+ *   看到的是一张白底黑字、没有导航、没有回到站内的路 —— 直接流失。
+ *
+ * 【与空态共用同一套材质】
+ *   走 EmptyState 组件，不另写材质。区别只是图标语义（🧭）与主行动
+ *   指向首页而非列表页。
+ *
+ * 【为什么是静态页而不是「catch-all 动态页」】
+ *   本站是纯静态输出（Cloudflare Pages），`src/pages/404.astro` 会被
+ *   构造成 `404.html`，由托管平台在路由未命中时自动返回 ——
+ *   这是静态站处理 404 的标准且唯一可靠做法。
+ */
+import Layout from "../layouts/Layout.astro";
+import EmptyState from "../components/EmptyState.astro";
+---
+
+<Layout title="页面走丢了 · 陈叔叔的奇幻空间">
+  <section class="py-16 md:py-24 px-6 md:px-8">
+    <div class="max-w-2xl mx-auto fade-in">
+      <EmptyState
+        icon="🧭"
+        title="这个页面走丢了"
+        message="你要找的地址不存在，或者内容已经被移走了。可能是链接过期，也可能是地址打错了一个字。"
+        actionLabel="回到首页"
+        actionHref="/"
+        actionPrimary
+        hint="如果是从站内链接点进来的，欢迎写信告诉我，我去修好它。"
+      />
+    </div>
+  </section>
+</Layout>

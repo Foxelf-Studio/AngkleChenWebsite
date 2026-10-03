@@ -2,6 +2,7 @@
 import Layout from "../../layouts/Layout.astro";
 import { getCollection } from "astro:content";
 import { card, cardHover, trans } from "../../lib/glass";
+import EmptyState from "../../components/EmptyState.astro";
 
 export async function getStaticPaths() {
   const posts = await getCollection("posts");
@@ -27,20 +28,32 @@ function fmt(d: Date) {
     <div class="max-w-4xl mx-auto fade-in">
       <a href="/tags" class="text-white/50 text-xs hover:text-[#E4B863] {trans}">← 所有标签</a>
       <h1 class="font-semibold text-white text-3xl md:text-5xl mt-6"># {tag}</h1>
-      <div class="grid grid-cols-1 gap-6 mt-10">
-        {
-          posts.map((post) => (
-            <a
-              href={`/post/${post.id}`}
-              class={`block ${card} ${cardHover} ${trans} p-6 md:p-8`}
-            >
-              <div class="text-xs text-white/50 mb-2">{fmt(post.data.date)}</div>
-              <h3 class="font-semibold text-white text-xl md:text-2xl mb-2">{post.data.title}</h3>
-              <p class="text-white/50 text-sm">{post.data.excerpt}</p>
-            </a>
-          ))
-        }
-      </div>
+      {
+        posts.length === 0 ? (
+          <div class="mt-10">
+            <EmptyState
+              icon="🫧"
+              title="这个标签下还没有文章"
+              message={`「${tag}」目前是空的，等我写下相关的文章，它就会出现在这里。`}
+              actionLabel="浏览所有标签"
+              actionHref="/tags"
+            />
+          </div>
+        ) : (
+          <div class="grid grid-cols-1 gap-6 mt-10">
+            {posts.map((post) => (
+              <a
+                href={`/post/${post.id}`}
+                class={`block ${card} ${cardHover} ${trans} p-6 md:p-8`}
+              >
+                <div class="text-xs text-white/50 mb-2">{fmt(post.data.date)}</div>
+                <h3 class="font-semibold text-white text-xl md:text-2xl mb-2">{post.data.title}</h3>
+                <p class="text-white/50 text-sm">{post.data.excerpt}</p>
+              </a>
+            ))}
+          </div>
+        )
+      }
     </div>
   </section>
 </Layout>

@@ -2,6 +2,7 @@
 import Layout from "../layouts/Layout.astro";
 import { getCollection, getEntry } from "astro:content";
 import { card, cardHover, btn, tagChip, platformChip, trans } from "../lib/glass";
+import EmptyState from "../components/EmptyState.astro";
 
 const apps = await getCollection("apps");
 
@@ -19,44 +20,59 @@ const appsIntro =
       <p class="text-white/80 text-sm md:text-base mt-4 max-w-xl leading-relaxed">
         {appsIntro}
       </p>
-      <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mt-10">
+      <div class="mt-10">
         {
-          apps.map((app) => (
-            <div class={`${card} ${cardHover} ${trans} p-6 md:p-8`}>
-              <div class="text-3xl mb-4">{app.data.icon}</div>
-              <div class="flex items-center justify-between gap-4 mb-2">
-                <h3 class="font-semibold text-white text-xl md:text-2xl">{app.data.name}</h3>
-                <span class="text-[#E4B863] text-xs font-mono">{app.data.version}</span>
-              </div>
-              <div class="flex flex-wrap gap-2">
-                <span class={tagChip}>{app.data.tag}</span>
-                {app.data.platforms.map((p) => (
-                  <span class={platformChip}>{p}</span>
-                ))}
-              </div>
-              <p class="text-white/50 text-sm leading-relaxed mt-3">{app.data.description}</p>
-              <div class="mt-5">
-                {
-                  app.data.downloadUrl ? (
-                    <a
-                      href={app.data.downloadUrl}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      class={`${btn} inline-block px-5 py-2 text-xs`}
-                    >
-                      下载
-                    </a>
-                  ) : (
-                    <span class="inline-block px-5 py-2 text-xs text-white/35 border border-white/10 rounded-2xl cursor-not-allowed">
-                      敬请期待
-                    </span>
-                  )
-                }
-              </div>
+          apps.length === 0 ? (
+            <EmptyState
+              icon="🧰"
+              title="软件还在打磨中"
+              message="这里暂时还没有上架的软件。做好一个小工具，我就会把它放上来。"
+              actionLabel="先看看文章"
+              actionHref="/"
+              actionPrimary
+            />
+          ) : (
+            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+              {apps.map((app) => (
+                <div class={`${card} ${cardHover} ${trans} p-6 md:p-8`}>
+                  <div class="text-3xl mb-4">{app.data.icon}</div>
+                  <div class="flex items-center justify-between gap-4 mb-2">
+                    <h3 class="font-semibold text-white text-xl md:text-2xl">{app.data.name}</h3>
+                    <span class="text-[#E4B863] text-xs font-mono">{app.data.version}</span>
+                  </div>
+                  <div class="flex flex-wrap gap-2">
+                    <span class={tagChip}>{app.data.tag}</span>
+                    {app.data.platforms.map((p) => (
+                      <span class={platformChip}>{p}</span>
+                    ))}
+                  </div>
+                  <p class="text-white/50 text-sm leading-relaxed mt-3">{app.data.description}</p>
+                  <div class="mt-5">
+                    {app.data.downloadUrl ? (
+                      <a
+                        href={app.data.downloadUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        class={`${btn} inline-block px-5 py-2 text-xs`}
+                      >
+                        下载
+                      </a>
+                    ) : (
+                      /* 禁用态：此前用 text-white/35，在深色底上对比度约 2.6:1，
+                         远低于 WCAG AA 正文要求的 4.5:1，读起来吃力。
+                         提到 /50 后约 3.9:1；再配合 dashed 边框把它明确表达为
+                         「尚未上架」而非「坏了」，语义也更清楚。 */
+                      <span class="inline-block px-5 py-2 text-xs text-white/50 border border-dashed border-white/15 rounded-2xl cursor-not-allowed">
+                        敬请期待
+                      </span>
+                    )}
+                  </div>
+                </div>
+              ))}
             </div>
-          ))
+          )
         }
-      </div>
+      }
     </div>
   </section>
 </Layout>

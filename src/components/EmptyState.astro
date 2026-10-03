@@ -1,0 +1,84 @@
+---
+/**
+ * 空态 / 错误态玻璃面板 —— 规范 §八
+ *
+ * 一个组件同时承担「空态」与「错误态」：两者在视觉上是同一件事
+ * （居中玻璃面板 + 弱化说明 + 可选主行动），差别只在文案与
+ * 图标语义。拆成两个组件会让"同一套玻璃语言"出现两份实现，
+ * 久了一定漂移 —— 所以这里用 props 区分，样式只有一份。
+ *
+ * 【为什么不用 backdrop-filter】
+ *   面板背后是页面底色（纯色 / 平滑渐变），模糊零收益；而模糊核会
+ *   越过元素边界把相邻元素采进来，形成边缘亮带。玻璃感由
+ *   `statePanel` 常量里的「半透明白底 + inset 高光/暗缘 + 细边框」表达。
+ *
+ * 【为什么图标不用 emoji 默认值以外的颜色】
+ *   唯一强调色香槟金 `#E4B863` 只留给主 CTA 与关键数字。
+ *   状态图标属于"氛围"，用白色低透明度即可，不抢金色。
+ */
+import { statePanel, stateTitle, stateText, btn, cta } from "../lib/glass";
+
+interface Props {
+  /** 主图标（emoji 或短字符）。空态常用 🔍 / 📭，错误态常用 ⚠️ */
+  icon?: string;
+  /** 标题。留空则只显示说明句，用于"轻量空态" */
+  title?: string;
+  /** 说明文案 */
+  message: string;
+  /** 可选主行动按钮文案 */
+  actionLabel?: string;
+  /** 主行动链接地址（用 <a>，因为这是导航而非表单提交） */
+  actionHref?: string;
+  /** 补充提示，显示在主行动下方，更弱 */
+  hint?: string;
+  /**
+   * 是否把这枚行动渲染成**金色主 CTA**。
+   * 默认 false —— 因为多数空态（标签下无文章、软件列表为空）只是
+   * 一条"换条路走"的次要出口，用无色玻璃即可。
+   * 只有当这枚行动是**整页唯一主行动**时才置 true
+   * （例如首页无文章时的「看看我做的软件」、404 页的「回到首页」）。
+   * 依据：规范 §3.2 —— 香槟金只用于主 CTA，且页面内不应有多个金色 CTA 抢主次。
+   */
+  actionPrimary?: boolean;
+}
+
+const {
+  icon = "📭",
+  title = "",
+  message,
+  actionLabel = "",
+  actionHref = "",
+  hint = "",
+  actionPrimary = false,
+} = Astro.props;
+
+const actionClass = actionPrimary ? cta : btn;
+---
+
+<div class={`${statePanel} p-8 md:p-12 text-center`}>
+  {
+    icon && (
+      <div class="text-3xl md:text-4xl mb-4 opacity-80" aria-hidden="true">
+        {icon}
+      </div>
+    )
+  }
+  {
+    title && (
+      <h2 class={`${stateTitle} mb-2`}>{title}</h2>
+    )
+  }
+  <p class={`${stateText} max-w-md mx-auto`}>{message}</p>
+  {
+    actionLabel && actionHref && (
+      <a href={actionHref} class={`${actionClass} inline-block mt-6 px-6 py-3 text-sm`}>
+        {actionLabel}
+      </a>
+    )
+  }
+  {
+    hint && (
+      <p class="text-white/35 text-xs mt-4 leading-relaxed">{hint}</p>
+    )
+  }
+</div>

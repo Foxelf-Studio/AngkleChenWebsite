@@ -73,6 +73,15 @@ transition-all duration-500 ease-[cubic-bezier(0.16,1,0.3,1)]
 ```
 
 - **主 CTA（唯一香槟金元素，也是「玻璃无色」铁律的唯一豁免）**：`bg-[#E4B863]/12 border-[#E4B863]/40 text-[#F3DCA8]`；hover 时 `hover:bg-[#E4B863]/15 hover:border-[#E4B863]/60`。金色只用于 CTA 按钮，其余按钮一律无色玻璃。
+  - **落地常量**：`src/lib/glass.ts` 的 `cta`（2026-10-03 新增）。
+  - **何时用**：只有当这枚行动是**当前屏唯一的主行动**时才用金色 ——
+    首页 Hero 的「看看我做的软件 →」、404 页的「回到首页」、首页无文章时的
+    「看看我做的软件」。次要出口（标签下无文章 → 浏览所有标签）用无色 `btn`。
+  - **一屏一个**：同一屏内不得出现两个金色 CTA，否则主次消失、金色贬值。
+  - **文字色用 `text-[#F3DCA8]`**（香槟金浅色调）而非纯白，保证金色半透明底上的对比度。
+  - > **历史**：§3.2 自 v1.0 起就定义了这条 token，但**代码里一处都没落地**，
+    > 全站按钮长得一模一样、没有主次。2026-10-03 才补上 `cta` 常量并接入
+    > 首页 / 404 / 空态。规范有 token 不等于有实现 —— 交付时须核对。
 
 ### 3.3 输入框
 
@@ -220,23 +229,72 @@ transition-all duration-500 ease-[cubic-bezier(0.16,1,0.3,1)]
 
 ## 八、状态组件（空态 / 加载 / 错误）
 
-三者共享同一玻璃语言，与按钮/卡片一致，不引入新材质：
+三者共享同一玻璃语言，与按钮/卡片一致，不引入新材质。
 
-```
-<!-- 空态 / 错误态：居中玻璃面板 + 弱化说明 + 可选香槟 CTA -->
-<div class="bg-white/8 backdrop-blur-[60px] backdrop-saturate-[180%]
-  border border-white/15 rounded-3xl p-8 md:p-12 text-center
-  shadow-[0_16px_40px_rgba(3,7,18,0.5),inset_0_1px_0_rgba(255,255,255,0.22),inset_0_-1px_0_rgba(2,6,16,0.35)]">
-  <p class="text-white/50 text-sm">{EMPTY / ERROR 文案}</p>
-  <button class="[按钮 token] mt-5 px-5 py-2 text-xs">{重试 / 返回}</button>
+> **【2026-10-03 重大修订】本节旧示例带 `backdrop-blur-[60px]` / `[40px]`，已删除。**
+> 原因：① 状态面板背后是页面底色（纯色 / 平滑渐变），模糊**零收益**；
+> ② 模糊核会**越过元素边界采样**，把相邻元素的亮边框采进来 → 边缘出现
+> 亮带（这正是 `glass.ts` 铁律 1 与 §12.3 第 6 条要防的事）；
+> ③ 旧示例还漏了 `backdrop-saturate`，直接踩中禁止项。
+> 状态面板的玻璃感**只用**「半透明白底 + inset 高光/暗缘 + 细边框」表达，
+> 与 `card` 完全同语言 —— 不许自创第二套材质。
+
+### 8.1 玻璃配方（唯一权威：`src/lib/glass.ts` 的 `statePanel`）
+
+```html
+<!-- 空态 / 错误态：居中玻璃面板 + 弱化说明 + 可选主行动 -->
+<div class="isolate bg-white/8 border border-white/15 rounded-3xl
+  shadow-[0_16px_40px_rgba(3,7,18,0.5),inset_0_1px_0_rgba(255,255,255,0.22),inset_0_-1px_0_rgba(2,6,16,0.35)]
+  [background-image:linear-gradient(to_bottom,rgba(255,255,255,0.12),transparent_50%)]
+  liquid-surface liquid-sheen p-8 md:p-12 text-center">
+  <div class="text-3xl md:text-4xl mb-4 opacity-80">📭</div>
+  <h2 class="font-semibold text-white text-xl md:text-2xl mb-2">{标题}</h2>
+  <p class="text-white/50 text-sm leading-relaxed max-w-md mx-auto">{说明}</p>
+  <a class="[btn token] inline-block mt-6 px-6 py-3 text-sm" href="...">{主行动}</a>
+  <p class="text-white/35 text-xs mt-4">{补充提示（可选）}</p>
 </div>
-
-<!-- 加载态：低透明度 shimmer 骨架，底色用 glass，高光条用 white/10 -->
-<div class="animate-pulse bg-white/6 backdrop-blur-[40px] backdrop-saturate-[180%]
-  border border-white/15 rounded-3xl h-28"></div>
 ```
 
-- 加载态可用 `animate-pulse`（透明度呼吸）作为例外——它不是「柔和淡入」，而是骨架屏的常规信号，但仍须在 `prefers-reduced-motion` 下关闭。
+**注意：`statePanel` 刻意不带 `liquid-pane`** —— 状态面板通常独占一屏、
+没有同层邻居，邻卡后退没有对象；保持安静即可。高光（`liquid-surface`）
+仍然跟手。
+
+### 8.2 加载态（骨架屏）
+
+```html
+<!-- 骨架基元：与真实内容**同构**的版式节奏，否则内容填入时会跳动 -->
+<div class="animate-pulse bg-white/6 border border-white/10 rounded-2xl liquid-surface liquid-sheen liquid-sheen--tight"></div>
+<!-- 细高光条：更亮、更窄，暗示"内容即将填充" -->
+<div class="animate-pulse bg-white/10 rounded-full h-3 w-20"></div>
+```
+
+骨架屏**必须复刻真实内容的网格列数与内部结构**（日期行 / 标题 / 摘要 / chips），
+否则从骨架切到内容会看到明显跳动。
+
+### 8.3 铁律
+
+1. **禁用 `backdrop-filter`**（同 §12.3 第 6 条）。状态面板不是"会滚过正文的浮层"。
+2. **禁用 `liquid-pane`**。状态区不做邻卡后退。
+3. **状态图标不使用香槟金**。金色只留给主 CTA 与关键数字；状态图标属于氛围，用白色低透明度。
+4. **主行动用 `<a>` 而非 `<button>`**：状态区的主行动本质是导航（回首页 / 回列表），
+   用链接才有无障碍语义与中键新开标签页的能力。
+5. **`animate-pulse` 是唯一允许的例外动画** —— 它是骨架屏的常规信号，不是"柔和淡入"。
+   只动 `opacity`（合成层属性，不触发 reflow），且在 `prefers-reduced-motion: reduce` 下
+   被全局规则关掉。
+6. **禁用态文字不得低于 `text-white/50`**（对应深色底 ≈ 3.9:1）。旧实现用 `/35`（≈2.6:1）
+   低于 WCAG AA 的 4.5:1，已修。禁用态还应用 `border-dashed` 明确表达"尚未上架"，
+   而不只是"变淡"。
+
+### 8.4 落地位置
+
+| 场景 | 组件 | 文件 |
+|---|---|---|
+| 文章列表为空 | `EmptyState` | `src/pages/index.astro` |
+| 标签总览为空 | `EmptyState` | `src/pages/tags.astro` |
+| 某标签下无文章 | `EmptyState` | `src/pages/tags/[tag].astro` |
+| 软件列表为空 | `EmptyState` | `src/pages/apps.astro` |
+| 访问不存在的地址 | `EmptyState` | `src/pages/404.astro` |
+| 列表加载中 | `CardSkeleton` | 供未来异步场景使用 |
 
 ---
 
@@ -643,6 +701,9 @@ mask-image: linear-gradient(to bottom, #000 0px, #000 50px, transparent 64px);
 7. **修复输入框 focus 阴影覆盖**：focus 时补回底部暗缘，避免「光有方向」在聚焦态丢失。
 8. **补等宽字体 token**：`font-mono text-white/85`（版本号/代码/数字）。
 9. **新增状态组件**：空态/错误态/加载态 token，杜绝执行者自行发明材质。
+   ——（2026-10-03）**该项当时只有 token、没有落地**：全站零个状态组件、
+   框架默认 404 是纯白页。现已补齐 `EmptyState.astro` / `CardSkeleton.astro` /
+   `src/pages/404.astro`，并修正 §八 旧示例的 `backdrop-blur` 违规。
 10. **禁止项 gray 家族统一**：`bg-gray-100/900` 扩为 `bg-gray-*` 全家族。
 
 **v1.2（液态层 beta，分支 `beta/liquid-glass`）**

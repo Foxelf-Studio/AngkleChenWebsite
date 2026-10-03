@@ -55,6 +55,27 @@ export const cardHover =
 export const btn =
   "isolate bg-white/10 border border-white/20 rounded-2xl text-white shadow-[0_4px_16px_rgba(3,7,18,0.45),inset_0_1px_0_rgba(255,255,255,0.25),inset_0_-1px_0_rgba(2,6,16,0.3)] hover:bg-white/12 hover:border-white/30 hover:shadow-[0_4px_16px_rgba(3,7,18,0.45),inset_0_1px_0_rgba(255,255,255,0.35),inset_0_-1px_0_rgba(2,6,16,0.3)] transition-all duration-500 ease-[cubic-bezier(0.16,1,0.3,1)] active:scale-[0.97] liquid-surface liquid-sheen liquid-sheen--tight";
 
+// ============================================================
+// 主 CTA（唯一香槟金元素）—— 规范 §3.2
+// ============================================================
+// 【为什么必须存在这个常量】
+//   规范 §3.2 早就定义了金色主 CTA token，但代码里**一处都没落地**：
+//   首页 Hero 的「看看我做的软件 →」原本用的是无色 `btn`，
+//   全站的行动号召因此没有视觉主次 —— 每个按钮都长得一样。
+//   「香槟金只用于主 CTA」这条铁律，前提是**主 CTA 真的存在**；
+//   没有一个金色 CTA，唯一强调色就等于不存在。
+//
+// 【铁律遵守】
+//   · 透明度：`bg-[#E4B863]/12` —— 与白色玻璃的上限 bg-white/12 同级，
+//     hover 到 `/15` 是规范明文给的**唯一豁免**（金色 CTA 的 hover）。
+//   · 外阴影静态与 hover **结构一致**（同样偏移/模糊），只调 inset 亮度，
+//     符合铁律 2「外阴影必须结构一致」。
+//   · 文字用 `text-[#F3DCA8]`（香槟金的浅色调）而非纯白 ——
+//     保证在金色半透明底上仍有足够对比度，且与金色同色系不割裂。
+//   · 不做位移（铁律 4），只用 `active:scale-[0.97]` 给按压反馈。
+export const cta =
+  "isolate bg-[#E4B863]/12 border border-[#E4B863]/40 rounded-2xl text-[#F3DCA8] shadow-[0_4px_16px_rgba(3,7,18,0.45),inset_0_1px_0_rgba(255,255,255,0.25),inset_0_-1px_0_rgba(2,6,16,0.3)] hover:bg-[#E4B863]/15 hover:border-[#E4B863]/60 hover:shadow-[0_4px_16px_rgba(3,7,18,0.45),inset_0_1px_0_rgba(255,255,255,0.35),inset_0_-1px_0_rgba(2,6,16,0.3)] transition-all duration-500 ease-[cubic-bezier(0.16,1,0.3,1)] active:scale-[0.97] liquid-surface liquid-sheen liquid-sheen--tight";
+
 export const tagChip =
   "inline-block bg-white/6 border border-white/15 rounded-2xl text-white/85 text-xs px-3 py-1 shadow-[inset_0_1px_0_rgba(255,255,255,0.15),inset_0_-1px_0_rgba(2,6,16,0.3)] hover:bg-white/12 hover:border-white/30 transition-all duration-500 ease-[cubic-bezier(0.16,1,0.3,1)] liquid-surface liquid-sheen liquid-sheen--tight";
 
@@ -107,3 +128,42 @@ export const liquid = `${liquidTarget} ${liquidSheen}`;
 //   比"另写一套 cardStatic 常量"好在：卡片的外观语言只有一份，
 //   将来改 card 不会漏掉静态变体。
 export const liquidPaneOff = "liquid-pane--off";
+
+// ============================================================
+// 状态组件（空态 / 加载 / 错误）—— 规范 §八
+// ============================================================
+// 【为什么要有这一组】
+//   此前全站没有任何状态组件：文章为空、软件列表为空、标签下无文章、
+//   访问了不存在的文章/标签 —— 这些"非正常但有意义"的时刻，页面要么
+//   渲染出一片空白，要么直接掉进框架默认 404（纯白页）。
+//   用户看到的是"网站坏了"，而不是"这里暂时没有内容"。
+//
+// 【材质约束（与 card 同语言，不引入新材质）】
+//   1. **不带 backdrop-filter** —— 状态面板背后是页面底色（纯色/平滑渐变），
+//      模糊零收益、全副作用（模糊核越界采样会让相邻元素边缘出现亮带）。
+//      玻璃感仍由"半透明白底 + inset 高光/暗缘 + 细边框"表达。规范 §八
+//      原示例里的 `backdrop-blur-[60px]` 已同步删除（详见 §八）。
+//   2. **不带 liquid-pane** —— 状态面板通常独占一屏、没有"同层邻居"，
+//      邻卡后退没有对象。两个以上状态并排的场景（如错误页里的"重试 + 返回"）
+//      也用不到后退动画，保持安静。
+//   3. **带 liquid-surface + liquid-sheen** —— 高光仍然跟手（诚实材质）。
+//
+// 【尺寸纪律】statePanel 默认按内容宽度自适应，调用方用 `max-w-*` 收窄即可。
+
+/** 空态 / 错误态面板：居中玻璃容器 + 放宽的留白 */
+export const statePanel =
+  "isolate bg-white/8 border border-white/15 rounded-3xl shadow-[0_16px_40px_rgba(3,7,18,0.5),inset_0_1px_0_rgba(255,255,255,0.22),inset_0_-1px_0_rgba(2,6,16,0.35)] [background-image:linear-gradient(to_bottom,rgba(255,255,255,0.12),transparent_50%)] liquid-surface liquid-sheen";
+
+/** 状态区文案：说明句，比正文更弱、比标题更淡 */
+export const stateText = "text-white/50 text-sm leading-relaxed";
+
+/** 状态区标题：仍用玻璃语言的白字，不使用香槟金（金色只留给主 CTA / 关键数字） */
+export const stateTitle = "font-semibold text-white text-xl md:text-2xl";
+
+/** 骨架屏基元：低透明白块，配合 animate-pulse 做"加载中"信号 */
+export const skeleton =
+  "animate-pulse bg-white/6 border border-white/10 rounded-2xl liquid-surface liquid-sheen liquid-sheen--tight";
+
+/** 骨架屏里的高光条：一条更亮的窄条，暗示"内容即将填充" */
+export const skeletonBar =
+  "animate-pulse bg-white/10 rounded-full";

@@ -1,0 +1,65 @@
+---
+/**
+ * 卡片网格骨架屏 —— 规范 §八
+ *
+ * 用在与"卡片网格"同构的加载场景：文章列表、标签、软件列表。
+ * 骨架必须复刻真实内容的**版式节奏**（同列数、同卡片高度区间、
+ * 同内部结构），否则内容填入时会看到明显跳动。
+ *
+ * 【为什么 animate-pulse 是唯一允许的例外动画】
+ *   规范 §六 要求"柔和淡入"、禁止跳动式动效；但骨架屏的信号本身就是
+ *   "正在呼吸地等待"，animate-pulse（透明度呼吸）是行业惯例。
+ *   它只动 opacity（合成层属性），不触发 reflow，且在
+ *   `prefers-reduced-motion: reduce` 下会被全局规则关掉
+ *   （global.css 末尾的 `animation-duration: 0.01ms`）。
+ *
+ * 【为什么不做 shimmer 扫光】
+ *   扫光需要背景位置动画，移动端成本高，且与本站"克制的单色玻璃"
+ *   气质不符。呼吸已经足够表达"加载中"。
+ */
+import { card, skeleton, skeletonBar } from "../lib/glass";
+
+interface Props {
+  /** 骨架卡片数量 */
+  count?: number;
+  /** 网格列数（与真实内容保持一致） */
+  columns?: 1 | 2 | 3;
+}
+
+const { count = 6, columns = 3 } = Astro.props;
+
+const gridCols =
+  columns === 1
+    ? "grid-cols-1"
+    : columns === 2
+      ? "grid-cols-1 md:grid-cols-2"
+      : "grid-cols-1 md:grid-cols-2 lg:grid-cols-3";
+---
+
+<div
+  class={`grid ${gridCols} gap-6`}
+  role="status"
+  aria-label="内容加载中"
+  aria-busy="true"
+>
+  {
+    Array.from({ length: count }).map(() => (
+      <div class={`${card} p-6 md:p-8`} aria-hidden="true">
+        {/* 日期行：一条窄条，对应真实卡片顶部的 meta 行 */}
+        <div class={`${skeletonBar} h-3 w-20 mb-4`} />
+        {/* 标题：两段不同宽度的条，模拟标题换行 */}
+        <div class={`${skeleton} h-6 w-3/4 mb-2 rounded-xl`} />
+        <div class={`${skeleton} h-6 w-1/2 mb-4 rounded-xl`} />
+        {/* 摘要：三行递减 */}
+        <div class={`${skeletonBar} h-3 w-full mb-2`} />
+        <div class={`${skeletonBar} h-3 w-full mb-2`} />
+        <div class={`${skeletonBar} h-3 w-2/3 mb-5`} />
+        {/* 标签：两个小胶囊，呼应 tagChip 尺寸 */}
+        <div class="flex flex-wrap gap-2">
+          <div class={`${skeleton} h-6 w-16 rounded-2xl`} />
+          <div class={`${skeleton} h-6 w-14 rounded-2xl`} />
+        </div>
+      </div>
+    ))
+  }
+</div>
