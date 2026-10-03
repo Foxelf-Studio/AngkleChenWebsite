@@ -416,21 +416,17 @@ const github = site.github || "";
           inset 0 -1px 0 rgba(2, 6, 16, 0.18);
       }
 
-      /* 焦点环：仅键盘触发（规范 3.4，2026-10-03 由香槟金改为白色高光）
+      /* 焦点环：仅键盘触发（规范 3.4，2026-10-03 改白色 + 画在外侧）
          开关的视觉焦点环画在**轨道**上（见下），input 本身是 sr-only，
-         所以先把全局白环从 input 上摘掉，避免 1px 的隔离盒漏出细边。 */
+         所以先把全局白环从 input 上彻底摘掉，避免隐藏盒漏出细边。 */
       #liquidToggle:focus-visible {
         outline: none;
         box-shadow: none;
       }
       #liquidToggle:focus-visible ~ .liquid-switch__track {
-        outline: none;
-        box-shadow:
-          0 0 0 1px rgba(255, 255, 255, 0.85),
-          0 0 0 4px rgba(255, 255, 255, 0.18),
-          0 4px 16px rgba(3, 7, 18, 0.45),
-          inset 0 1px 0 rgba(255, 255, 255, 0.22),
-          inset 0 -1px 0 rgba(2, 6, 16, 0.35);
+        outline: 2px solid rgba(255, 255, 255, 0.85);
+        outline-offset: 4px;
+        box-shadow: 0 0 0 5px rgba(255, 255, 255, 0.12);
       }
 
       /* ---- 底栏：柔化顶边 ----
