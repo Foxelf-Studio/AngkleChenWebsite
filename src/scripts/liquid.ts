@@ -158,6 +158,12 @@ if (tier === "full" || tier === "lite") {
     isPane: boolean; // 是否为「面」—— 只有面参与邻卡后退（缩小）。
                      // 按钮/标签是"件"，只跟手高光，永不后退。
     lit: boolean;    // 上一帧的高光点亮状态 —— 供滞后判定用（见 LIT_RELEASE_PX）
+    litWritten: boolean; // 是否已把 --lite **显式写**过一次（哪怕写的是 0）。
+                         // false 时首帧必须写，否则会落回 CSS 默认值 ——
+                         // 而"JS 以为灭、页面显示亮"就是第十一轮那个 bug。
+    snapSeen: boolean; // tx/ty 是否已被 snapCoords() 用**真实指针**写过。
+                       // false = 还是 collect() 的默认值 0.78/0.08，
+                       // 此时**禁止**用它做任何判定（第十一轮的根因）。
   }
 
   const surfaces: Surface[] = [];
@@ -241,6 +247,10 @@ if (tier === "full" || tier === "lite") {
         el,
         rect: new DOMRect(),
         // 默认光位：右上（与 body 背景主光斑同向），未移动指针时也好看
+        // 【注意】这两个数只决定"还没动指针时高光画在哪"（输出），
+        //   绝不能参与判定（输入）—— 第十轮的教训就是被它们坑了。
+        //   判定侧由 snapSeen 把关：没被 snapCoords() 写过，
+        //   就一律视为"指针不在其中"。详见下方 coordsLive 的注释。
         tx: 0.78,
         ty: 0.08,
         px: 0.78,
@@ -253,6 +263,10 @@ if (tier === "full" || tier === "lite") {
         isPane:
           el.classList.contains(PANE_CLASS) && !el.classList.contains(PANE_OFF_CLASS),
         lit: false,
+        // 这个元素的 tx/ty 是否已由 snapCoords() 用**真实指针**写过
+        snapSeen: false,
+        // 是否已显式写过 --lite（首帧必写一次，见 tick 里的注释）
+        litWritten: false,
       });
     });
     rectsDirty = true;
@@ -340,6 +354,9 @@ if (tier === "full" || tier === "lite") {
   //   thrashing；事件本身每帧至多一两次，量级完全可接受。
   //   换来的是**彻底确定**的高光位置 —— 这比省几次读重要得多。
   function snapCoords() {
+    // 能走到这里 = 刚收到一个真实的 pointer/touch 事件，
+    // 坐标真的来自用户 —— 从此刻起判定可以信了。
+    coordsLive = true;
     for (const s of surfaces) {
       // 每次都重量：元素可能刚进入视口 / 刚被创建
       s.rect = s.el.getBoundingClientRect();
@@ -347,9 +364,43 @@ if (tier === "full" || tier === "lite") {
       const h = s.rect.height || 1;
       s.tx = (clientX - s.rect.left) / w;
       s.ty = (clientY - s.rect.top) / h;
+      s.snapSeen = true;
     }
     rectsDirty = false;
   }
+
+  // ------------------------------------------------------------
+  // 【2026-10-03 第十一轮：判定用的坐标必须"见过真实指针"才算数】
+  // ------------------------------------------------------------
+  // 上一轮（第九轮）把 clientX/clientY 的初值改成 OFFSCREEN，
+  //   修好了 data-focus 误开。但用户随即报：
+  //     「切换页面或刷新页面、鼠标不动，光直接默认打在卡片右上方，
+  //       导航栏也是」
+  //   —— 白光的**位置**是对的（--mx/--my = 78%/8%，本来就是默认光位），
+  //   问题是它**亮着**（--lite = 1），而且鼠标动一下才归位。
+  //
+  // 复查（txprobe.mjs + litewhy.mjs）发现上一轮**修错了变量**：
+  //   · data-focus 判定读 `pointerInViewport` ← 来自 clientX/clientY ✅ 已修
+  //   · 但 --lite 判定读 `litNow` ← 来自 **s.tx/s.ty**（每元素锚定坐标）
+  //     而 s.tx/s.ty 只由 snapCoords() 写，snapCoords() **只在
+  //     pointer/touch 事件里被调用** —— 在第一个真实指针事件到来之前，
+  //     它们一直是 collect() 给的默认值 0.78 / 0.08。
+  //   而 0.78/0.08 **恰好落在卡片内部**（宽 78%、高 8%；卡片高约 300px，
+  //   8% = 卡顶下方 24px）→ litNow = true → litOn = true → --lite = 1。
+  //   证据：253ms 首帧的 style 写入就是
+  //     `--mx: 78.00%; --my: 8.00%; --lite: 1`，三张卡一模一样。
+  //
+  // 正解：把"这个元素的坐标是否来自真实指针"变成一个**显式状态**，
+  //   而不是靠"坐标恰好看起来合理"来猜。
+  //   · `coordsLive` —— 至少收到过一次真实指针位置（pointer/touch 事件）
+  //   · `s.snapSeen` —— 该元素自己的 s.tx/s.ty 是 snapCoords() 写的
+  //     （collect() 新建的元素没有，即使全局 coordsLive 为 true）
+  //   两者都为真时判定才生效；否则该元素**一律判为"指针不在其中"**。
+  //
+  // 与上一轮同一句话的推广：
+  //   **"尚未知道"必须显式表达为"不知道"，绝不能让一个"好看的默认值"
+  //     冒充真实输入。** 上一轮只修了全局坐标，这一轮补齐了元素坐标。
+  let coordsLive = false;
 
   // 是否有真正的 hover 能力。触屏没有 hover，改用「按住」作为活跃条件。
   const hasHover = window.matchMedia("(hover: hover) and (pointer: fine)").matches;
@@ -469,6 +520,20 @@ if (tier === "full" || tier === "lite") {
       px >= 0 && px <= window.innerWidth &&
       py >= 0 && py <= window.innerHeight;
 
+    // 【2026-10-03 第十一轮】"真的知道指针在哪吗？"
+    //   coordsLive     —— 全局：至少收到过一次真实指针事件
+    //   s.snapSeen     —— 元素级：这个元素的 tx/ty 被真实指针写过
+    //   （collect() 新建的元素即使全局已 live 也还没 seen）
+    //
+    //   两个条件缺一，该元素就**一律判为"指针不在其中"**：
+    //   litNow = false、paneNow = false、focus 不触发。
+    //   这样"还没动鼠标时的默认坐标 0.78/0.08"就再也无法冒充真实输入。
+    //
+    //   注意必须**每个元素各自判**，不能用全局 coordsLive 一个条件 ——
+    //   切页时 collect() 会重建 surfaces，新元素需要重新被 snapCoords()
+    //   覆盖（而下一次 pointermove 会立刻做到，所以只是那一两帧的事）。
+    const pointerKnown = coordsLive && pointerInViewport;
+
     for (const s of surfaces) {
       if (!s.inView) continue;
 
@@ -488,6 +553,10 @@ if (tier === "full" || tier === "lite") {
       }
 
       const style = s.el.style;
+      // 【注意】--mx/--my 是**输出**，即使还没见过真实指针也要写 ——
+      //   这样"刚加载完"的画面仍是设计好的默认光位（右上角），不难看。
+      //   被 snapSeen 守住的只是**判定**，不是输出。这正是第十一轮
+      //   那句"让输出好看、但别让输出冒充输入"的落地。
       style.setProperty("--mx", `${(s.px * 100).toFixed(2)}%`);
       style.setProperty("--my", `${(s.py * 100).toFixed(2)}%`);
 
@@ -509,7 +578,13 @@ if (tier === "full" || tier === "lite") {
       // 高光（lit）：允许 2px 外扩 —— "贴到边缘就亮"，不必精确压线。
       //   与 --mx/--my 用的是**同一个点**（s.tx/s.ty），
       //   不会出现"高光已经画在卡片里、判定还说在外面"。
+      //
+      //   【2026-10-03 第十一轮】前置 `s.snapSeen`：
+      //     tx/ty 若还是 collect() 的默认 0.78/0.08，它们**恰好落在卡内**，
+      //     一旦参与判定就会把"还没动鼠标"误判成"指针在卡片上"。
+      //     加这一道闸门后，首帧必定 litNow = false → --lite = 0。
       const litNow =
+        s.snapSeen &&
         s.tx >= -ex &&
         s.tx <= 1 + ex &&
         s.ty >= -ey &&
@@ -521,7 +596,9 @@ if (tier === "full" || tier === "lite") {
       // 只有 .liquid-pane（卡片/面板）参与，按钮标签不参与。
       // 注意是 s.isPane（登记时算好），不是裸 isPane —— 后者不存在，
       // 会在第一个元素上抛 ReferenceError，导致本行之后的 --lite 永不写入。
-      const paneNow = s.isPane && s.tx >= 0 && s.tx <= 1 && s.ty >= 0 && s.ty <= 1;
+      // 同样加 `s.snapSeen` 前置（理由同上）。
+      const paneNow =
+        s.snapSeen && s.isPane && s.tx >= 0 && s.tx <= 1 && s.ty >= 0 && s.ty <= 1;
 
       // 指针在元素内 **且处于活跃状态** → 高光可见；否则淡出，避免"隔空点亮"。
       // 触屏上 pressed 只在按下期间为 true，抬手后高光按 CSS 过渡淡出 ——
@@ -553,15 +630,33 @@ if (tier === "full" || tier === "lite") {
       const rx = (LIT_EDGE_PX + LIT_RELEASE_PX) / (r.width || 1);
       const ry = (LIT_EDGE_PX + LIT_RELEASE_PX) / (r.height || 1);
       const litOn = pressed && litNow;
+      // 【第十一轮】`pointerKnown` 已经含 `pointerInViewport` 与 `coordsLive`；
+      //   再要求 `s.snapSeen` —— 三个条件一起，才允许"保持点亮"。
       const stillNear =
-        pointerInViewport &&
+        pointerKnown &&
+        s.snapSeen &&
         s.tx >= -rx && s.tx <= 1 + rx && s.ty >= -ry && s.ty <= 1 + ry;
       const litValue = litOn || (s.lit && pressed && stillNear);
-      if (litValue !== s.lit) {
+      // 【2026-10-03 第十一轮】条件从 `litValue !== s.lit` 改为
+      //   `!s.litWritten || litValue !== s.lit`。
+      //
+      //   原条件有个隐藏陷阱：s.lit 初值就是 false（collect() 里给的），
+      //   所以首帧 litValue 也是 false 时**相等 → 不写**。
+      //   而"不写"意味着该元素的 --lite 退回 CSS 默认值 ——
+      //   原先 CSS 默认是 1，于是 JS 以为"灭"、页面显示"亮"，语义相反。
+      //   （这正是用户看到的"光直接默认打在卡片右上方"。
+      //     txprobe.mjs 修前：8 次写入全是 1；改 snapSeen 后：0 次写入、
+      //     inline 为空、computed 仍为 1 → 光还亮着，必须显式写 0。）
+      //
+      //   加 `!s.litWritten` 后，每个元素在它被登记后的**第一帧必定写一次**
+      //   （哪怕是写 0），从此页面状态永远由 JS 定义，CSS 默认值只作为
+      //   "JS 完全没跑"时的兜底（且现在兜底也改成 0，见 global.css）。
+      if (!s.litWritten || litValue !== s.lit) {
         s.lit = litValue;
+        s.litWritten = true;
         style.setProperty("--lite", litValue ? "1" : "0");
       }
-      if (paneNow && pointerInViewport) anyInside = true;
+      if (paneNow && pointerKnown) anyInside = true;
     }
 
     // ---- 邻卡后退的触发源 ----
