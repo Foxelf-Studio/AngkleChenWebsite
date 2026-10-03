@@ -34,6 +34,21 @@
 
 type Tier = "full" | "lite" | "static" | "fallback";
 
+// ------------------------------------------------------------
+// 【"指针不在任何地方"的哨兵值】—— 全文件唯一的"离开"语义
+// ------------------------------------------------------------
+// 两处共用同一个值，因为它们表达的是同一件事：
+//   ① clientX/clientY 的**初值** —— 脚本刚跑起来、还没收到任何 pointer 事件
+//   ② leaveViewport() 的**离开值** —— 指针移出窗口 / 切标签页失焦
+//
+// 【为什么必须是 -9999 而不是 (-1,-1) 或 0】—— 第八轮踩坑记录：
+//   (-1,-1) 只是"左上角外 1px"，**暗含方向假设**。对贴着屏幕左上角的
+//   导航栏（top=0 / left=0），归一化后只有 (-0.08%, -1.54%)，仍落在
+//   滞后容差（rx 0.62% / ry 12.3%）之内 → 判定为"还在附近" → 高光卡死。
+//   -9999 归一化后是大负数（实测 --my ≈ -15380%），任何元素、任何容差
+//   都不可能包含它 —— 这才真正表达"不在任何地方"。
+const OFFSCREEN = -9999;
+
 /** 特性 + 偏好检测。刻意不用 UA 嗅探（不可靠且易误判）。 */
 function detectTier(): Tier {
   const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
@@ -241,6 +256,14 @@ if (tier === "full" || tier === "lite") {
       });
     });
     rectsDirty = true;
+    // 【2026-10-03 第十轮】重建 surfaces 时**必须**同时撤销"邻卡后退"状态。
+    //   理由：新 surfaces 带着上面那两个默认光位（0.78 / 0.08）进场，
+    //   若此时指针恰好是"尚未收到真实坐标"（初值 OFFSCREEN）或旧页遗留的
+    //   坐标，第一帧就可能用假坐标判出 inside；即便这次判对了，
+    //   focusInside 这个**模块级变量**仍是旧值，与 data-focus 属性不再一致。
+    //   两处一起清，保证"重新收集"后状态从干净的地板开始。
+    //   （clearFocus 定义在下方，函数声明会提升，这里可以安全调用。）
+    clearFocus();
   }
 
   // 只更新"是否在视口内"的廉价标记 + 缓存 rect（供无坐标时的初始/兜底使用）。
@@ -258,8 +281,39 @@ if (tier === "full" || tier === "lite") {
   }
 
   // 全局指针位置（客户端坐标，像素）—— 唯一的指针状态
-  let clientX = window.innerWidth * 0.78;
-  let clientY = window.innerHeight * 0.08;
+  //
+  // 【2026-10-03 第十轮修：初值不能是"一个好看的默认光位"】
+  //   原写法是 `innerWidth * 0.78 / innerHeight * 0.08` —— 一个特意挑的
+  //   "右上角主光斑方向"的默认光位，让**还没移动指针时**页面也不难看。
+  //   这个动机本身没问题，但它踩了一个致命的坑：**它是真实的判定输入**。
+  //
+  //   现象（用户报障）：
+  //     「按导航栏按钮切换页面后，新页面所有卡片都是退让状态，
+  //       鼠标动一下才恢复。只要切换页面就会这样。」
+  //
+  //   复现（focuspairs.mjs）：**页面刚加载完、还没做任何鼠标操作**时，
+  //     data-focus 就已经是 "inside"、三张卡全缩着 —— 也就是说这个错误
+  //     与"切换页面"无关，而是**每次脚本初始化都会犯一次**。
+  //
+  //   根因链：
+  //     · collect() 给每个 surface 的默认光位是 tx:0.78 / ty:0.08；
+  //     · 顶层的 clientX/clientY 又恰好是同一个点（innerWidth*0.78, ...）；
+  //     · 首次 wake() 的那一帧，snapCoords 还没跑过，s.tx/s.ty 就是
+  //       这两个默认值 —— 它**落在任何一张卡片的宽度 78%、高度 8% 处**
+  //       （卡片高约 300px，8% = 卡顶下方 24px → 确确实实在卡内！）；
+  //     · 于是 insideNow = true → anyInside = true
+  //       → 写入 html[data-focus="inside"] → 全站卡片后退。
+  //
+  //     切页时再犯一次：Astro 导航后 astro:page-load 重新 collect()，
+  //     surfaces 被重建、默认坐标再次进场，同样的假坐标再判一次 inside。
+  //
+  //   正解：**"尚未见过真实指针"必须表达为"指针不在任何地方"**，
+  //     而不是"指针在某个好看的位置"。初值直接用 OFFSCREEN 哨兵
+  //     （它没有方向假设、任何元素都容不下，见第八轮 leaveViewport）。
+  //     视觉上完全无损失 —— --mx/--my 仍由 collect() 的默认光位提供，
+  //     它们与判定无关，只是"还没动指针时高光画在哪"。
+  let clientX = OFFSCREEN;
+  let clientY = OFFSCREEN;
 
   // ------------------------------------------------------------
   // 【2026-10-03 第九轮（最终解）：采集坐标的那一刻就锚定】
@@ -606,11 +660,17 @@ if (tier === "full" || tier === "lite") {
   //     ① documentElement 的 mouseleave —— 鼠标真正离开文档根元素
   //     ② window 的 blur —— 切标签页 / 点其他窗口失焦
   //   并额外在 tick 里做几何兜底：指针落在视口外就视为不在任何元素内。
-  const clearFocus = () => {
+  // 【2026-10-03 第十轮：从 const 箭头函数改为函数声明】
+  //   因为 collect()（定义在上方）现在要调用它来撤销残留状态。
+  //   `const` 存在 TDZ —— 而 collect() 在模块底部就会被执行一次，
+  //   那一刻本行还没求值 → 会抛 "Cannot access 'clearFocus' before
+  //   initialization"。函数声明会整体提升，调用安全。
+  //   （同理 deleteFocus 常量也不能放在这里被 collect 引用。）
+  function clearFocus() {
     if (!focusInside) return;
     focusInside = false;
     delete document.documentElement.dataset.focus;
-  };
+  }
 
   // 【关键】离开视口时不能只清 focus —— 还必须让 tick() 知道
   //   "指针已经不在视口内"，否则 tick 里重新计算出的 anyInside 会基于
@@ -627,7 +687,11 @@ if (tier === "full" || tier === "lite") {
   //   **高光卡死**（用户实测：鼠标在页面中部，导航栏一直亮）。
   //   改用 -9999：任何元素的归一化坐标都会变成绝对值远超容差的大负数。
   //   配合 tick 里 stillNear 增加 pointerInViewport 前置条件，双保险。
-  const OFFSCREEN = -9999;
+  //
+  // 【2026-10-03 第十轮】提升到模块作用域 —— 现在被两处共用：
+  //   ① leaveViewport 里作"离开视口"的哨兵；
+  //   ② clientX/clientY 的**初值**（"尚未见过真实指针"）。
+  //   两处语义本来就是同一个："指针不在任何地方"。
   const leaveViewport = () => {
     clientX = OFFSCREEN;
     clientY = OFFSCREEN;
